@@ -71,6 +71,12 @@ create policy "agendamentos_select"
 create policy "agendamentos_insert"
   on agendamentos for insert with check (true);
 
+-- Agendamentos: cliente pode cancelar (confirmado → cancelado)
+create policy "agendamentos_cancel"
+  on agendamentos for update
+  using (status = 'confirmado')
+  with check (status = 'cancelado');
+
 -- ─────────────────────────────────────────────────────────────
 --  Dados de exemplo — Funcionárias
 -- ─────────────────────────────────────────────────────────────

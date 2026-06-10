@@ -80,6 +80,9 @@ export default function AgendamentoPage() {
         clientePhone: phone,
         data,
         hora,
+        servicoNome: servico.nome,
+        duracaoMin: servico.duracao_min,
+        funcionariaNome: funcionaria.nome,
       })
       setSuccess(true)
     } catch (e) {

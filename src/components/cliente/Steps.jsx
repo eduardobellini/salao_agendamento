@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useServicos, useFuncionarias, useHorariosOcupados } from '../../hooks/useAgendamento'
-import { HOURS, DAYS, COR_MAP } from '../../lib/constants'
+import { HOURS, DAYS, MONTHS, COR_MAP } from '../../lib/constants'
 import { BtnPrimary, BtnBack, SectionLabel, Spinner, EditBanner } from '../shared/UI'
 
 // ─── Utilitários ────────────────────────────────────────────────────────────
@@ -11,14 +12,19 @@ function toLocalISODate(date) {
   return `${y}-${m}-${d}`
 }
 
-function get14Days() {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today)
-    d.setDate(today.getDate() + i)
-    return d
-  })
+function getMonthCalendar(year, month) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDow = new Date(year, month, 1).getDay() // 0 = Dom
+  const cells = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
+  return cells
+}
+
+function isSlotPast(iso, hora) {
+  const [Y, M, D] = iso.split('-').map(Number)
+  const [h, m] = hora.split(':').map(Number)
+  return new Date(Y, M - 1, D, h, m) <= new Date()
 }
 
 // ─── Step 1: Serviço ────────────────────────────────────────────────────────
@@ -163,12 +169,28 @@ export function StepDataHora({
   editMode,
   onCancelEdit,
 }) {
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+
+  const [calYear, setCalYear] = useState(hoje.getFullYear())
+  const [calMonth, setCalMonth] = useState(hoje.getMonth())
+
   const { ocupados, loading: loadingSlots } = useHorariosOcupados(funcionariaId, selectedData)
-  const days = get14Days()
+  const cells = getMonthCalendar(calYear, calMonth)
+  const isCurrentMonth = calYear === hoje.getFullYear() && calMonth === hoje.getMonth()
+
+  function prevMonth() {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) }
+    else setCalMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) }
+    else setCalMonth(m => m + 1)
+  }
 
   function handleSelectData(iso) {
     onSelectData(iso)
-    onSelectHora(null) // limpa horário ao trocar data
+    onSelectHora(null)
   }
 
   return (
@@ -179,28 +201,58 @@ export function StepDataHora({
       <p className="text-gray-500 text-sm mb-6">Escolha data e horário disponíveis</p>
 
       <SectionLabel>Data</SectionLabel>
+
+      {/* Navegação de mês */}
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={prevMonth}
+          disabled={isCurrentMonth}
+          className="w-8 h-8 rounded-lg flex items-center justify-center
+            hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+        >
+          <i className="ti ti-chevron-left text-gray-600" />
+        </button>
+        <span className="text-sm font-semibold text-gray-700 capitalize">
+          {MONTHS[calMonth]} {calYear}
+        </span>
+        <button
+          onClick={nextMonth}
+          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition"
+        >
+          <i className="ti ti-chevron-right text-gray-600" />
+        </button>
+      </div>
+
+      {/* Cabeçalho dias da semana */}
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {DAYS.map(d => (
+          <div key={d} className="text-center text-[10px] font-medium text-gray-400 uppercase py-1">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Grade de dias */}
       <div className="grid grid-cols-7 gap-1 mb-6">
-        {days.map(d => {
-          const domingo = d.getDay() === 0
+        {cells.map((d, i) => {
+          if (!d) return <div key={`e-${i}`} />
+          const disabled = d.getDay() === 0 || d < hoje
           const iso = toLocalISODate(d)
           const sel = selectedData === iso
           return (
             <button
               key={iso}
-              disabled={domingo}
+              disabled={disabled}
               onClick={() => handleSelectData(iso)}
-              className={`flex flex-col items-center py-2 px-1 rounded-xl border transition-all text-xs
-                ${domingo
+              className={`py-2 rounded-xl border transition-all text-sm font-medium
+                ${disabled
                   ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
                   : sel
                   ? 'border-brand-500 bg-brand-500 text-white'
                   : 'border-gray-200 bg-white text-gray-700 hover:border-brand-300'
                 }`}
             >
-              <span className="text-[9px] font-medium mb-0.5 uppercase">
-                {DAYS[d.getDay()]}
-              </span>
-              <span className="font-bold text-sm">{d.getDate()}</span>
+              {d.getDate()}
             </button>
           )
         })}
@@ -216,15 +268,15 @@ export function StepDataHora({
           ) : (
             <div className="grid grid-cols-3 gap-2 mb-6">
               {HOURS.map(h => {
-                const busy = ocupados.includes(h)
+                const disabled = ocupados.includes(h) || isSlotPast(selectedData, h)
                 const sel = selectedHora === h
                 return (
                   <button
                     key={h}
-                    disabled={busy}
+                    disabled={disabled}
                     onClick={() => onSelectHora(h)}
                     className={`py-2.5 rounded-xl border text-sm font-medium transition-all
-                      ${busy
+                      ${disabled
                         ? 'border-gray-100 bg-gray-50 text-gray-300 line-through cursor-not-allowed'
                         : sel
                         ? 'border-brand-500 bg-brand-500 text-white'

@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
+function toLocalISODate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function useServicos() {
   const [servicos, setServicos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -101,6 +108,10 @@ export async function criarAgendamento({
   clientePhone,
   data,
   hora,
+  // extras para o Google Calendar
+  servicoNome,
+  duracaoMin,
+  funcionariaNome,
 }) {
   const { data: result, error } = await supabase
     .from('agendamentos')
@@ -123,5 +134,75 @@ export async function criarAgendamento({
     throw new Error(error.message)
   }
 
+  // Cria evento no Google Calendar e salva o ID no agendamento
+  if (servicoNome && funcionariaNome && duracaoMin) {
+    supabase.functions
+      .invoke('google-calendar', {
+        body: { servicoNome, duracaoMin, funcionariaNome, clienteNome, clientePhone, data, hora },
+      })
+      .then(({ data: gcal }) => {
+        if (gcal?.eventId) {
+          supabase
+            .from('agendamentos')
+            .update({ gcal_event_id: gcal.eventId })
+            .eq('id', result.id)
+            .then(() => {})
+        }
+      })
+      .catch(err => console.warn('Google Calendar sync falhou:', err))
+  }
+
   return result
+}
+
+export function useAgendamentosCliente(phone) {
+  const [agendamentos, setAgendamentos] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    if (!phone) { setAgendamentos([]); return }
+    setLoading(true)
+    const today = toLocalISODate(new Date())
+    supabase
+      .from('agendamentos')
+      .select('*, servicos(*), funcionarias(*)')
+      .eq('cliente_phone', phone)
+      .eq('status', 'confirmado')
+      .gte('data', today)
+      .order('data')
+      .order('hora')
+      .then(({ data: rows, error: err }) => {
+        if (err) setError(err.message)
+        else setAgendamentos(rows ?? [])
+        setLoading(false)
+      })
+  }, [phone, tick])
+
+  return { agendamentos, loading, error, refetch: () => setTick(t => t + 1) }
+}
+
+export async function cancelarAgendamento(id) {
+  // Busca o gcal_event_id antes de cancelar
+  const { data: ag } = await supabase
+    .from('agendamentos')
+    .select('gcal_event_id')
+    .eq('id', id)
+    .single()
+
+  const { error } = await supabase
+    .from('agendamentos')
+    .update({ status: 'cancelado' })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+
+  // Remove o evento do Google Calendar (fire-and-forget)
+  if (ag?.gcal_event_id) {
+    supabase.functions
+      .invoke('google-calendar', {
+        body: { action: 'delete', gcalEventId: ag.gcal_event_id },
+      })
+      .catch(err => console.warn('Google Calendar delete falhou:', err))
+  }
 }

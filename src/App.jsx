@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import AgendamentoPage from './pages/AgendamentoPage'
 import AgendaPage from './pages/AgendaPage'
+import MeusAgendamentosPage from './pages/MeusAgendamentosPage'
+
+const TABS = [
+  { id: 'agendamento',       label: 'Agendar',       icon: 'calendar-plus'  },
+  { id: 'meus-agendamentos', label: 'Meus horários', icon: 'calendar-user'  },
+  { id: 'agenda',            label: 'Agenda',        icon: 'calendar-event' },
+]
 
 export default function App() {
   const [view, setView] = useState('agendamento')
@@ -18,28 +25,17 @@ export default function App() {
           </div>
 
           <div className="flex gap-1">
-            <button
-              onClick={() => setView('agendamento')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-                ${view === 'agendamento'
-                  ? 'bg-brand-50 text-brand-600'
-                  : 'text-gray-500 hover:bg-gray-50'
-                }`}
-            >
-              <i className="ti ti-calendar-plus text-sm" />
-              Agendar
-            </button>
-            <button
-              onClick={() => setView('agenda')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-                ${view === 'agenda'
-                  ? 'bg-brand-50 text-brand-600'
-                  : 'text-gray-500 hover:bg-gray-50'
-                }`}
-            >
-              <i className="ti ti-calendar-event text-sm" />
-              Agenda
-            </button>
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setView(t.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
+                  ${view === t.id ? 'bg-brand-50 text-brand-600' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                <i className={`ti ti-${t.icon} text-sm`} />
+                <span className="hidden sm:inline">{t.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </nav>
@@ -47,6 +43,9 @@ export default function App() {
       {/* ── Páginas — mantidas montadas para preservar estado de auth ── */}
       <div style={{ display: view === 'agendamento' ? 'block' : 'none' }}>
         <AgendamentoPage />
+      </div>
+      <div style={{ display: view === 'meus-agendamentos' ? 'block' : 'none' }}>
+        <MeusAgendamentosPage />
       </div>
       <div style={{ display: view === 'agenda' ? 'block' : 'none' }}>
         <AgendaPage />
