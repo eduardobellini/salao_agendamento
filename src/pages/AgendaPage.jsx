@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DAYS, MONTHS, HOURS, COR_MAP } from '../lib/constants'
-import { useFuncionarias, useAgendamentoDia } from '../hooks/useAgendamento'
+import { useFuncionarias, useAgendamentoDia, getServicosDoAgendamento } from '../hooks/useAgendamento'
 import { Spinner, Modal } from '../components/shared/UI'
 
 const AGENDA_PASSWORD = import.meta.env.VITE_AGENDA_PASSWORD || 'agenda123'
@@ -91,21 +91,29 @@ function AgendamentoModal({ ag, onClose }) {
 
   const rawPhone = ag.cliente_phone ?? ''
   const waPhone = '55' + rawPhone.replace(/\D/g, '')
+  const servicosAg = getServicosDoAgendamento(ag)
+  const duracaoTotal = servicosAg.reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
+  const nomesServicos = servicosAg.map(s => s.nome).join(', ')
   const msgText =
     `Olá ${ag.cliente_nome}! Confirmando seu agendamento:\n` +
-    `Serviço: ${ag.servicos?.nome}\n` +
+    `${servicosAg.length > 1 ? 'Serviços' : 'Serviço'}: ${nomesServicos}\n` +
     `Profissional: ${ag.funcionarias?.nome}\n` +
     `Data: ${ag.data} às ${ag.hora?.slice(0, 5)}\n` +
-    `Duração: ${ag.servicos?.duracao_min} min\n\n` +
+    `Duração: ${duracaoTotal} min\n\n` +
     `Estamos te aguardando! 💚`
   const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msgText)}`
 
   return (
     <Modal open title={ag.cliente_nome} onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <Row icon="scissors" bg="bg-brand-50" color="text-brand-500" label="Serviço">
-          <p className="font-semibold text-gray-900 text-sm">{ag.servicos?.nome}</p>
-          <p className="text-xs text-gray-400">{ag.servicos?.duracao_min} minutos</p>
+        <Row
+          icon="scissors"
+          bg="bg-brand-50"
+          color="text-brand-500"
+          label={servicosAg.length > 1 ? 'Serviços' : 'Serviço'}
+        >
+          <p className="font-semibold text-gray-900 text-sm">{nomesServicos}</p>
+          <p className="text-xs text-gray-400">{duracaoTotal} minutos no total</p>
         </Row>
 
         <Row icon="clock" bg="bg-blue-50" color="text-blue-500" label="Horário">
@@ -183,18 +191,24 @@ function Timeline({ agendamentos, loading }) {
               </span>
               <div className="w-px h-4 bg-gray-200 shrink-0" />
               {ag ? (
-                <button
-                  onClick={() => setSelected(ag)}
-                  className="flex-1 bg-brand-50 border border-brand-200 rounded-xl
-                    px-3 py-2 text-left hover:bg-brand-100 transition-colors"
-                >
-                  <p className="text-sm font-semibold text-brand-700 leading-tight">
-                    {ag.cliente_nome}
-                  </p>
-                  <p className="text-xs text-brand-500 mt-0.5">
-                    {ag.servicos?.nome} · {ag.servicos?.duracao_min} min
-                  </p>
-                </button>
+                (() => {
+                  const servicosAg = getServicosDoAgendamento(ag)
+                  const duracaoTotal = servicosAg.reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
+                  return (
+                    <button
+                      onClick={() => setSelected(ag)}
+                      className="flex-1 bg-brand-50 border border-brand-200 rounded-xl
+                        px-3 py-2 text-left hover:bg-brand-100 transition-colors"
+                    >
+                      <p className="text-sm font-semibold text-brand-700 leading-tight">
+                        {ag.cliente_nome}
+                      </p>
+                      <p className="text-xs text-brand-500 mt-0.5">
+                        {servicosAg.map(s => s.nome).join(', ')} · {duracaoTotal} min
+                      </p>
+                    </button>
+                  )
+                })()
               ) : (
                 <div className="flex-1 h-8" />
               )}
@@ -256,18 +270,22 @@ export default function AgendaPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => shiftDay(-1)}
-              className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition"
+              aria-label="Dia anterior"
+              className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200
+                bg-white hover:bg-gray-50 active:scale-95 transition"
             >
-              <i className="ti ti-chevron-left text-gray-600" />
+              <i className="ti ti-chevron-left text-lg text-gray-600" />
             </button>
             <span className="text-sm font-semibold text-gray-700 whitespace-nowrap min-w-[120px] text-center">
               {isToday ? 'Hoje' : formatDateLong(date)}
             </span>
             <button
               onClick={() => shiftDay(1)}
-              className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition"
+              aria-label="Próximo dia"
+              className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200
+                bg-white hover:bg-gray-50 active:scale-95 transition"
             >
-              <i className="ti ti-chevron-right text-gray-600" />
+              <i className="ti ti-chevron-right text-lg text-gray-600" />
             </button>
           </div>
         </div>

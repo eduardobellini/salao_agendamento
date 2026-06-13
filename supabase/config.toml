@@ -1,0 +1,7 @@
+project_id = "salao_agendamento"
+
+# A função usa a própria conta de serviço do Google para autenticar e é chamada
+# pelo app com a chave publicável (que não é um JWT). Por isso a verificação de
+# JWT do gateway precisa ficar desligada, senão a chamada do navegador é bloqueada.
+[functions.google-calendar]
+verify_jwt = false

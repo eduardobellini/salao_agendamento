@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAgendamentosCliente, cancelarAgendamento } from '../hooks/useAgendamento'
+import { useAgendamentosCliente, cancelarAgendamento, getServicosDoAgendamento } from '../hooks/useAgendamento'
 import { DAYS, MONTHS, COR_MAP } from '../lib/constants'
 import { Spinner } from '../components/shared/UI'
 
@@ -108,6 +108,7 @@ export default function MeusAgendamentosPage() {
             {agendamentos.map(ag => {
               const cor = COR_MAP[ag.funcionarias?.cor] ?? COR_MAP.teal
               const isConfirming = cancelingId === ag.id
+              const servicosAg = getServicosDoAgendamento(ag)
 
               return (
                 <div key={ag.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
@@ -119,7 +120,9 @@ export default function MeusAgendamentosPage() {
                       {ag.funcionarias?.initials}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900">{ag.servicos?.nome}</p>
+                      <p className="font-semibold text-gray-900">
+                        {servicosAg.map(s => s.nome).join(', ')}
+                      </p>
                       <p className="text-sm text-gray-500">{ag.funcionarias?.nome}</p>
                       <div className="flex items-center gap-1 mt-1.5 text-sm text-brand-600 font-medium">
                         <i className="ti ti-calendar text-sm" />

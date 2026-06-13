@@ -103,11 +103,13 @@ export function Modal({ open, onClose, title, children }) {
   if (!open) return null
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6 shadow-xl"
+        className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[88vh]
+          overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-xl
+          animate-[slideup_.2s_ease-out] sm:animate-none"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">

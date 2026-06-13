@@ -78,10 +78,36 @@ async function getAccessToken(jwt: string): Promise<string> {
   return json.access_token
 }
 
-function formatLocal(ms: number): string {
-  const d   = new Date(ms)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
+const pad = (n: number) => String(n).padStart(2, '0')
+
+// Monta a string "wall-clock" (sem fuso) para uma data/hora local de São Paulo,
+// somando `addMin` minutos. Usa aritmética em UTC para NÃO depender do fuso do
+// servidor (o runtime do Edge roda em UTC) — assim o horário enviado ao Google
+// é exatamente o que o cliente escolheu.
+function localDateTime(Y: number, M: number, D: number, h: number, m: number, addMin = 0): string {
+  const d = new Date(Date.UTC(Y, M - 1, D, h, m))
+  d.setUTCMinutes(d.getUTCMinutes() + addMin)
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`
+}
+
+// (11) 99999-9999
+function formatPhone(raw: string): string {
+  const d = (raw ?? '').replace(/\D/g, '')
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return raw
+}
+
+// 105 -> "1h45" | 45 -> "45min"
+function formatDuracao(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h === 0) return `${m}min`
+  return m === 0 ? `${h}h` : `${h}h${pad(m)}`
+}
+
+function formatBRL(valor: number): string {
+  return `R$ ${valor.toFixed(2).replace('.', ',')}`
 }
 
 async function getToken(): Promise<string> {
@@ -122,20 +148,58 @@ Deno.serve(async (req) => {
     }
 
     // ── Criar evento ──────────────────────────────────────────────────────────
-    const { servicoNome, duracaoMin, funcionariaNome, clienteNome, clientePhone, data, hora } = body
+    const {
+      agendamentoId,      // para salvar o ID do evento de volta no banco
+      servicos,           // [{ nome, duracaoMin }]
+      servicoNome,        // compatibilidade com a versão antiga (serviço único)
+      duracaoMin,
+      precoTotal,
+      funcionariaNome,
+      clienteNome,
+      clientePhone,
+      data,
+      hora,
+    } = body
+
+    // Normaliza a lista de serviços (aceita o formato novo e o antigo)
+    const listaServicos: { nome: string; duracaoMin?: number }[] =
+      Array.isArray(servicos) && servicos.length > 0
+        ? servicos
+        : servicoNome
+          ? [{ nome: servicoNome, duracaoMin }]
+          : []
+
+    const nomesServicos = listaServicos.map(s => s.nome).join(', ')
+    const duracaoTotal  = Number(duracaoMin) ||
+      listaServicos.reduce((acc, s) => acc + (Number(s.duracaoMin) || 0), 0)
 
     const token = await getToken()
 
     const [Y, M, D] = (data as string).split('-').map(Number)
     const [h, m]    = (hora as string).split(':').map(Number)
-    const startMs   = new Date(Y, M - 1, D, h, m).getTime()
-    const endMs     = startMs + (duracaoMin as number) * 60_000
+
+    // Lista de serviços formatada para a descrição
+    const linhasServicos = listaServicos
+      .map(s => `   • ${s.nome}`)
+      .join('\n')
+
+    const descricao = [
+      `👤 Cliente: ${clienteNome}`,
+      `📱 WhatsApp: ${formatPhone(clientePhone)}`,
+      `💇 Profissional: ${funcionariaNome}`,
+      ``,
+      `${listaServicos.length > 1 ? '✂️ Serviços:' : '✂️ Serviço:'}`,
+      linhasServicos,
+      ``,
+      `⏱️ Duração total: ${formatDuracao(duracaoTotal)}`,
+      ...(precoTotal != null ? [`💰 Total estimado: ${formatBRL(Number(precoTotal))}`] : []),
+    ].join('\n')
 
     const event = {
-      summary: `${servicoNome} — ${clienteNome}`,
-      description: `Profissional: ${funcionariaNome}\nCliente: ${clienteNome}\nTelefone: ${clientePhone}`,
-      start: { dateTime: formatLocal(startMs), timeZone: 'America/Sao_Paulo' },
-      end:   { dateTime: formatLocal(endMs),   timeZone: 'America/Sao_Paulo' },
+      summary: `${clienteNome} — ${nomesServicos}`,
+      description: descricao,
+      start: { dateTime: localDateTime(Y, M, D, h, m),               timeZone: 'America/Sao_Paulo' },
+      end:   { dateTime: localDateTime(Y, M, D, h, m, duracaoTotal), timeZone: 'America/Sao_Paulo' },
     }
 
     const gcRes  = await fetch(
@@ -148,6 +212,29 @@ Deno.serve(async (req) => {
     )
     const gcJson = await gcRes.json()
     if (!gcRes.ok) throw new Error(`Google Calendar: ${JSON.stringify(gcJson)}`)
+
+    // Salva o ID do evento no agendamento usando a chave de serviço
+    // (ignora o RLS, que só permite updates de cancelamento pelo cliente).
+    if (agendamentoId && gcJson.id) {
+      const sbUrl = Deno.env.get('SUPABASE_URL')
+      const sbKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+      if (sbUrl && sbKey) {
+        const upd = await fetch(
+          `${sbUrl}/rest/v1/agendamentos?id=eq.${agendamentoId}`,
+          {
+            method: 'PATCH',
+            headers: {
+              apikey: sbKey,
+              Authorization: `Bearer ${sbKey}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({ gcal_event_id: gcJson.id }),
+          },
+        )
+        if (!upd.ok) console.error('Falha ao salvar gcal_event_id:', await upd.text())
+      }
+    }
 
     return new Response(JSON.stringify({ ok: true, eventId: gcJson.id }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },

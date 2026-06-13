@@ -63,7 +63,7 @@ function DetalheItem({ icon, iconBg, iconColor, label, children, onEdit }) {
 // ─── Componente principal ───────────────────────────────────────────────────
 
 export function Resumo({
-  servico,
+  servicos,
   funcionaria,
   data,
   hora,
@@ -81,6 +81,9 @@ export function Resumo({
   const [modalTerm, setModalTerm] = useState(false)
 
   const cor = COR_MAP[funcionaria?.cor] ?? COR_MAP.teal
+  const lista = servicos ?? []
+  const total = lista.reduce((acc, s) => acc + Number(s.preco), 0)
+  const duracaoTotal = lista.reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
 
   function handleConfirm() {
     if (!privOk || !termOk) {
@@ -105,13 +108,22 @@ export function Resumo({
 
         <div className="divide-y divide-gray-100">
           <DetalheItem
-            icon={servico?.icone ?? 'scissors'}
+            icon={lista[0]?.icone ?? 'scissors'}
             iconBg="bg-brand-50"
             iconColor="text-brand-500"
-            label="Serviço"
+            label={lista.length > 1 ? 'Serviços' : 'Serviço'}
             onEdit={() => onEdit(1)}
           >
-            <p className="text-sm font-semibold text-gray-900">{servico?.nome}</p>
+            <div className="space-y-1">
+              {lista.map(s => (
+                <div key={s.id} className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-semibold text-gray-900">{s.nome}</p>
+                  <p className="text-xs text-gray-400 whitespace-nowrap">
+                    {s.duracao_min} min · {formatPrice(s.preco)}
+                  </p>
+                </div>
+              ))}
+            </div>
           </DetalheItem>
 
           <div className="flex items-start gap-3 px-4 py-3">
@@ -145,7 +157,7 @@ export function Resumo({
             <p className="text-sm font-semibold text-gray-900">
               {formatDate(data)} às {hora}
             </p>
-            <p className="text-xs text-gray-400">{servico?.duracao_min} minutos</p>
+            <p className="text-xs text-gray-400">{duracaoTotal} minutos no total</p>
           </DetalheItem>
 
           <div className="flex items-center gap-3 px-4 py-3 bg-brand-50">
@@ -154,7 +166,7 @@ export function Resumo({
             </div>
             <div>
               <p className="text-xs text-gray-500 font-medium">Total estimado</p>
-              <p className="text-xl font-bold text-brand-600">{formatPrice(servico?.preco)}</p>
+              <p className="text-xl font-bold text-brand-600">{formatPrice(total)}</p>
             </div>
           </div>
         </div>

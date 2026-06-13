@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { StepServico, StepFuncionaria, StepDataHora, StepDados } from '../components/cliente/Steps'
 import { Resumo } from '../components/cliente/Resumo'
 import { StepIndicator } from '../components/shared/UI'
@@ -14,11 +14,17 @@ function formatDateBR(iso) {
   return `${DAYS[date.getDay()]}, ${d} de ${MONTHS[m - 1]}`
 }
 
-export default function AgendamentoPage() {
+export default function AgendamentoPage({ active = true }) {
   const [step, setStep] = useState(1)
   const [editingStep, setEditingStep] = useState(null)
 
-  const [servico, setServico] = useState(null)
+  // Recarrega a disponibilidade sempre que esta tela volta a ficar ativa
+  const [availToken, setAvailToken] = useState(0)
+  useEffect(() => {
+    if (active) setAvailToken(t => t + 1)
+  }, [active])
+
+  const [servicos, setServicos] = useState([])
   const [funcionaria, setFuncionaria] = useState(null)
   const [data, setData] = useState(null)
   const [hora, setHora] = useState(null)
@@ -51,6 +57,14 @@ export default function AgendamentoPage() {
 
   // ── Seleções ─────────────────────────────────────────────────────────────
 
+  function toggleServico(s) {
+    setServicos(prev =>
+      prev.some(x => x.id === s.id)
+        ? prev.filter(x => x.id !== s.id)
+        : [...prev, s],
+    )
+  }
+
   function handleSelectFuncionaria(f) {
     // ao trocar de profissional, limpa data e horário (slots diferentes)
     if (f.id !== funcionaria?.id) {
@@ -63,25 +77,33 @@ export default function AgendamentoPage() {
   // ── Handlers de avanço ───────────────────────────────────────────────────
 
   function next1() { isEditing ? saveAndReturn() : setStep(2) }
-  function next2() { isEditing ? saveAndReturn() : setStep(3) }
+  function next2() {
+    // Se a edição da profissional limpou data/horário, força reescolher o horário
+    if (isEditing && (!data || !hora)) { setEditingStep(3); setStep(3) }
+    else if (isEditing) saveAndReturn()
+    else setStep(3)
+  }
   function next3() { isEditing ? saveAndReturn() : setStep(4) }
   function next4() { isEditing ? saveAndReturn() : setStep(5) }
 
   // ── Confirmação final ────────────────────────────────────────────────────
 
   async function handleConfirm() {
+    // Proteção: garante que tudo está preenchido antes de enviar
+    if (servicos.length === 0) { setError('Selecione ao menos um serviço.'); setStep(1); return }
+    if (!funcionaria)          { setError('Escolha uma profissional.');      setStep(2); return }
+    if (!data || !hora)        { setError('Escolha a data e o horário.');    setStep(3); return }
+
     setLoading(true)
     setError(null)
     try {
       await criarAgendamento({
         funcionariaId: funcionaria.id,
-        servicoId: servico.id,
+        servicos,
         clienteNome: nome,
         clientePhone: phone,
         data,
         hora,
-        servicoNome: servico.nome,
-        duracaoMin: servico.duracao_min,
         funcionariaNome: funcionaria.nome,
       })
       setSuccess(true)
@@ -95,7 +117,7 @@ export default function AgendamentoPage() {
   function reset() {
     setStep(1)
     setEditingStep(null)
-    setServico(null)
+    setServicos([])
     setFuncionaria(null)
     setData(null)
     setHora(null)
@@ -117,8 +139,10 @@ export default function AgendamentoPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-2">Agendado com sucesso!</h2>
           <div className="text-gray-500 text-sm space-y-1 mb-8">
             <p>
-              <span className="font-semibold text-gray-700">{servico?.nome}</span> com{' '}
-              <span className="font-semibold text-gray-700">{funcionaria?.nome}</span>
+              <span className="font-semibold text-gray-700">
+                {servicos.map(s => s.nome).join(', ')}
+              </span>{' '}
+              com <span className="font-semibold text-gray-700">{funcionaria?.nome}</span>
             </p>
             <p>
               {formatDateBR(data)} às{' '}
@@ -147,8 +171,8 @@ export default function AgendamentoPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
           {step === 1 && (
             <StepServico
-              selected={servico}
-              onSelect={setServico}
+              selected={servicos}
+              onToggle={toggleServico}
               onNext={next1}
               editMode={isEditing}
               onCancelEdit={cancelEdit}
@@ -169,6 +193,7 @@ export default function AgendamentoPage() {
           {step === 3 && (
             <StepDataHora
               funcionariaId={funcionaria?.id}
+              reloadToken={availToken}
               selectedData={data}
               selectedHora={hora}
               onSelectData={setData}
@@ -195,7 +220,7 @@ export default function AgendamentoPage() {
 
           {step === 5 && (
             <Resumo
-              servico={servico}
+              servicos={servicos}
               funcionaria={funcionaria}
               data={data}
               hora={hora}

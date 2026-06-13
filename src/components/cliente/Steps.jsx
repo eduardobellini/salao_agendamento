@@ -29,15 +29,22 @@ function isSlotPast(iso, hora) {
 
 // ─── Step 1: Serviço ────────────────────────────────────────────────────────
 
-export function StepServico({ selected, onSelect, onNext, editMode, onCancelEdit }) {
+export function StepServico({ selected, onToggle, onNext, editMode, onCancelEdit }) {
   const { servicos, loading } = useServicos()
+
+  const selecionados = selected ?? []
+  const isSel = id => selecionados.some(s => s.id === id)
+  const total = selecionados.reduce((acc, s) => acc + Number(s.preco), 0)
+  const duracaoTotal = selecionados.reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
 
   return (
     <div>
       {editMode && <EditBanner onCancel={onCancelEdit} />}
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Qual serviço?</h1>
-      <p className="text-gray-500 text-sm mb-6">Escolha o serviço que deseja realizar</p>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Quais serviços?</h1>
+      <p className="text-gray-500 text-sm mb-6">
+        Selecione um ou mais serviços que deseja realizar
+      </p>
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -46,12 +53,13 @@ export function StepServico({ selected, onSelect, onNext, editMode, onCancelEdit
       ) : (
         <div className="flex flex-col gap-3 mb-6">
           {servicos.map(s => {
-            const sel = selected?.id === s.id
+            const sel = isSel(s.id)
             return (
               <button
                 key={s.id}
-                onClick={() => onSelect(s)}
+                onClick={() => onToggle(s)}
                 className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left
+                  active:scale-[0.98]
                   ${sel
                     ? 'border-brand-500 bg-brand-50'
                     : 'border-gray-200 hover:border-gray-300 bg-white'
@@ -70,16 +78,37 @@ export function StepServico({ selected, onSelect, onNext, editMode, onCancelEdit
                 <p className="font-bold text-gray-900 text-sm whitespace-nowrap shrink-0">
                   R$ {Number(s.preco).toFixed(2).replace('.', ',')}
                 </p>
-                {sel && (
-                  <i className="ti ti-circle-check-filled text-brand-500 text-lg shrink-0" />
-                )}
+                <div
+                  className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0
+                    transition-colors
+                    ${sel
+                      ? 'bg-brand-500 border-brand-500 text-white'
+                      : 'border-gray-300 bg-white'
+                    }`}
+                >
+                  {sel && <i className="ti ti-check text-sm" />}
+                </div>
               </button>
             )
           })}
         </div>
       )}
 
-      <BtnPrimary onClick={onNext} disabled={!selected}>
+      {/* Resumo da seleção */}
+      {selecionados.length > 0 && (
+        <div className="flex items-center justify-between bg-brand-50 border border-brand-100
+          rounded-xl px-4 py-3 mb-4 text-sm">
+          <span className="text-gray-600">
+            {selecionados.length} {selecionados.length === 1 ? 'serviço' : 'serviços'}
+            {duracaoTotal > 0 && <span className="text-gray-400"> · {duracaoTotal} min</span>}
+          </span>
+          <span className="font-bold text-brand-600">
+            R$ {total.toFixed(2).replace('.', ',')}
+          </span>
+        </div>
+      )}
+
+      <BtnPrimary onClick={onNext} disabled={selecionados.length === 0}>
         {editMode ? 'Salvar e voltar ao resumo' : 'Continuar'}
         {!editMode && <i className="ti ti-arrow-right text-sm" />}
       </BtnPrimary>
@@ -120,6 +149,7 @@ export function StepFuncionaria({
                 key={f.id}
                 onClick={() => onSelect(f)}
                 className={`p-4 rounded-xl border-2 transition-all text-center relative
+                  active:scale-[0.98]
                   ${sel
                     ? 'border-brand-500 bg-brand-50'
                     : 'border-gray-200 hover:border-gray-300 bg-white'
@@ -160,6 +190,7 @@ export function StepFuncionaria({
 
 export function StepDataHora({
   funcionariaId,
+  reloadToken,
   selectedData,
   selectedHora,
   onSelectData,
@@ -175,7 +206,7 @@ export function StepDataHora({
   const [calYear, setCalYear] = useState(hoje.getFullYear())
   const [calMonth, setCalMonth] = useState(hoje.getMonth())
 
-  const { ocupados, loading: loadingSlots } = useHorariosOcupados(funcionariaId, selectedData)
+  const { ocupados, loading: loadingSlots } = useHorariosOcupados(funcionariaId, selectedData, reloadToken)
   const cells = getMonthCalendar(calYear, calMonth)
   const isCurrentMonth = calYear === hoje.getFullYear() && calMonth === hoje.getMonth()
 
@@ -207,19 +238,21 @@ export function StepDataHora({
         <button
           onClick={prevMonth}
           disabled={isCurrentMonth}
-          className="w-8 h-8 rounded-lg flex items-center justify-center
+          aria-label="Mês anterior"
+          className="w-10 h-10 rounded-lg flex items-center justify-center active:scale-95
             hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
         >
-          <i className="ti ti-chevron-left text-gray-600" />
+          <i className="ti ti-chevron-left text-lg text-gray-600" />
         </button>
         <span className="text-sm font-semibold text-gray-700 capitalize">
           {MONTHS[calMonth]} {calYear}
         </span>
         <button
           onClick={nextMonth}
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition"
+          aria-label="Próximo mês"
+          className="w-10 h-10 rounded-lg flex items-center justify-center active:scale-95 hover:bg-gray-100 transition"
         >
-          <i className="ti ti-chevron-right text-gray-600" />
+          <i className="ti ti-chevron-right text-lg text-gray-600" />
         </button>
       </div>
 
@@ -244,7 +277,8 @@ export function StepDataHora({
               key={iso}
               disabled={disabled}
               onClick={() => handleSelectData(iso)}
-              className={`py-2 rounded-xl border transition-all text-sm font-medium
+              className={`min-h-[44px] rounded-xl border transition-all text-sm font-medium
+                active:scale-95
                 ${disabled
                   ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
                   : sel
@@ -275,7 +309,8 @@ export function StepDataHora({
                     key={h}
                     disabled={disabled}
                     onClick={() => onSelectHora(h)}
-                    className={`py-2.5 rounded-xl border text-sm font-medium transition-all
+                    className={`min-h-[48px] rounded-xl border text-sm font-medium transition-all
+                      active:scale-95
                       ${disabled
                         ? 'border-gray-100 bg-gray-50 text-gray-300 line-through cursor-not-allowed'
                         : sel

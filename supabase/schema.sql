@@ -34,7 +34,7 @@ create table servicos (
 create table agendamentos (
   id              uuid primary key default uuid_generate_v4(),
   funcionaria_id  uuid not null references funcionarias (id),
-  servico_id      uuid not null references servicos (id),
+  servico_id      uuid references servicos (id),  -- 1º serviço (fallback); a lista fica em agendamento_servicos
   cliente_nome    text not null,
   cliente_phone   text not null,
   data            date not null,
@@ -43,17 +43,27 @@ create table agendamentos (
                     check (status in ('confirmado', 'cancelado')),
   created_at      timestamptz not null default now(),
 
+  gcal_event_id   text,
+
   -- garante que cada profissional só tem um agendamento por slot
   constraint agendamentos_slot_unico unique (funcionaria_id, data, hora)
+);
+
+-- Serviços de cada agendamento (vários por agendamento)
+create table agendamento_servicos (
+  agendamento_id uuid not null references agendamentos (id) on delete cascade,
+  servico_id     uuid not null references servicos (id),
+  primary key (agendamento_id, servico_id)
 );
 
 -- ─────────────────────────────────────────────────────────────
 --  Row Level Security
 -- ─────────────────────────────────────────────────────────────
 
-alter table funcionarias  enable row level security;
-alter table servicos       enable row level security;
-alter table agendamentos   enable row level security;
+alter table funcionarias        enable row level security;
+alter table servicos            enable row level security;
+alter table agendamentos        enable row level security;
+alter table agendamento_servicos enable row level security;
 
 -- Funcionárias: leitura pública (somente)
 create policy "funcionarias_select"
@@ -76,6 +86,13 @@ create policy "agendamentos_cancel"
   on agendamentos for update
   using (status = 'confirmado')
   with check (status = 'cancelado');
+
+-- Serviços do agendamento: leitura e inserção públicas
+create policy "agendamento_servicos_select"
+  on agendamento_servicos for select using (true);
+
+create policy "agendamento_servicos_insert"
+  on agendamento_servicos for insert with check (true);
 
 -- ─────────────────────────────────────────────────────────────
 --  Dados de exemplo — Funcionárias

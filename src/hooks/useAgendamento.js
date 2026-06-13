@@ -8,6 +8,16 @@ function toLocalISODate(date) {
   return `${y}-${m}-${d}`
 }
 
+// Extrai a lista de serviços de um agendamento, lidando com o novo formato
+// (tabela de junção) e com registros antigos de serviço único.
+export function getServicosDoAgendamento(ag) {
+  const lista = (ag?.agendamento_servicos ?? [])
+    .map(j => j.servicos)
+    .filter(Boolean)
+  if (lista.length) return lista
+  return ag?.servicos ? [ag.servicos] : []
+}
+
 export function useServicos() {
   const [servicos, setServicos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -50,15 +60,30 @@ export function useFuncionarias() {
   return { funcionarias, loading, error }
 }
 
-export function useHorariosOcupados(funcionariaId, data) {
+export function useHorariosOcupados(funcionariaId, data, reloadToken = 0) {
   const [ocupados, setOcupados] = useState([])
   const [loading, setLoading] = useState(false)
+  const [focusTick, setFocusTick] = useState(0)
+
+  // Recarrega quando o usuário volta para a aba/app (ex.: cancelou em outro lugar)
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState !== 'hidden') setFocusTick(t => t + 1)
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [])
 
   useEffect(() => {
     if (!funcionariaId || !data) {
       setOcupados([])
       return
     }
+    let cancelled = false
     setLoading(true)
     supabase
       .from('agendamentos')
@@ -67,10 +92,12 @@ export function useHorariosOcupados(funcionariaId, data) {
       .eq('data', data)
       .eq('status', 'confirmado')
       .then(({ data: rows }) => {
+        if (cancelled) return
         setOcupados((rows ?? []).map(r => r.hora.slice(0, 5)))
         setLoading(false)
       })
-  }, [funcionariaId, data])
+    return () => { cancelled = true }
+  }, [funcionariaId, data, reloadToken, focusTick])
 
   return { ocupados, loading }
 }
@@ -87,7 +114,7 @@ export function useAgendamentoDia(funcionariaId, data) {
     setLoading(true)
     supabase
       .from('agendamentos')
-      .select('*, servicos(*), funcionarias(*)')
+      .select('*, servicos!agendamentos_servico_id_fkey(*), funcionarias(*), agendamento_servicos(servicos(*))')
       .eq('funcionaria_id', funcionariaId)
       .eq('data', data)
       .eq('status', 'confirmado')
@@ -103,21 +130,22 @@ export function useAgendamentoDia(funcionariaId, data) {
 
 export async function criarAgendamento({
   funcionariaId,
-  servicoId,
+  servicos,          // array de serviços: [{ id, nome, duracao_min, preco }]
   clienteNome,
   clientePhone,
   data,
   hora,
-  // extras para o Google Calendar
-  servicoNome,
-  duracaoMin,
+  // extra para o Google Calendar
   funcionariaNome,
 }) {
+  const lista = servicos ?? []
+  if (lista.length === 0) throw new Error('Selecione ao menos um serviço.')
+
   const { data: result, error } = await supabase
     .from('agendamentos')
     .insert({
       funcionaria_id: funcionariaId,
-      servico_id: servicoId,
+      servico_id: lista[0].id, // 1º serviço como fallback
       cliente_nome: clienteNome,
       cliente_phone: clientePhone.replace(/\D/g, ''),
       data,
@@ -134,20 +162,29 @@ export async function criarAgendamento({
     throw new Error(error.message)
   }
 
+  // Vincula todos os serviços ao agendamento
+  const { error: jErr } = await supabase
+    .from('agendamento_servicos')
+    .insert(lista.map(s => ({ agendamento_id: result.id, servico_id: s.id })))
+  if (jErr) console.warn('Falha ao vincular serviços:', jErr.message)
+
   // Cria evento no Google Calendar e salva o ID no agendamento
-  if (servicoNome && funcionariaNome && duracaoMin) {
+  if (funcionariaNome) {
+    const duracaoMin = lista.reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
+    const precoTotal = lista.reduce((acc, s) => acc + Number(s.preco ?? 0), 0)
     supabase.functions
       .invoke('google-calendar', {
-        body: { servicoNome, duracaoMin, funcionariaNome, clienteNome, clientePhone, data, hora },
-      })
-      .then(({ data: gcal }) => {
-        if (gcal?.eventId) {
-          supabase
-            .from('agendamentos')
-            .update({ gcal_event_id: gcal.eventId })
-            .eq('id', result.id)
-            .then(() => {})
-        }
+        body: {
+          agendamentoId: result.id,
+          servicos: lista.map(s => ({ nome: s.nome, duracaoMin: s.duracao_min })),
+          duracaoMin,
+          precoTotal,
+          funcionariaNome,
+          clienteNome,
+          clientePhone,
+          data,
+          hora,
+        },
       })
       .catch(err => console.warn('Google Calendar sync falhou:', err))
   }
@@ -167,7 +204,7 @@ export function useAgendamentosCliente(phone) {
     const today = toLocalISODate(new Date())
     supabase
       .from('agendamentos')
-      .select('*, servicos(*), funcionarias(*)')
+      .select('*, servicos!agendamentos_servico_id_fkey(*), funcionarias(*), agendamento_servicos(servicos(*))')
       .eq('cliente_phone', phone)
       .eq('status', 'confirmado')
       .gte('data', today)
