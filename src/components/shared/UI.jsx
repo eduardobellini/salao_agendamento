@@ -84,6 +84,24 @@ export function SectionLabel({ children }) {
   )
 }
 
+export function ErrorBox({ children, onRetry, className = '' }) {
+  if (!children) return null
+  return (
+    <div
+      className={`flex items-center gap-2 bg-red-50 border border-red-200
+        rounded-xl px-4 py-3 text-sm text-red-700 ${className}`}
+    >
+      <i className="ti ti-alert-circle shrink-0" />
+      <span className="flex-1">{children}</span>
+      {onRetry && (
+        <button onClick={onRetry} className="underline font-semibold shrink-0">
+          Tentar de novo
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function Spinner({ size = 'md', color = 'brand' }) {
   const sizes = {
     sm: 'w-4 h-4 border-[2px]',

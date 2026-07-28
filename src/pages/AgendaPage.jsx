@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { DAYS, MONTHS, HOURS, COR_MAP } from '../lib/constants'
-import { useFuncionarias, useAgendamentoDia, getServicosDoAgendamento } from '../hooks/useAgendamento'
-import { Spinner, Modal } from '../components/shared/UI'
-
-const AGENDA_PASSWORD = import.meta.env.VITE_AGENDA_PASSWORD || 'agenda123'
+import {
+  useFuncionarias,
+  useAgendaDoDia,
+  validarSenhaAgenda,
+  getServicosDoAgendamento,
+  somaDuracao,
+} from '../hooks/useAgendamento'
+import { Spinner, Modal, ErrorBox } from '../components/shared/UI'
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
 
@@ -29,15 +33,25 @@ function formatPhoneDisplay(digits) {
 
 function PasswordScreen({ onAuth }) {
   const [val, setVal] = useState('')
-  const [err, setErr] = useState(false)
+  const [err, setErr] = useState(null)
+  const [loading, setLoading] = useState(false)
 
-  function submit(e) {
+  // A senha é conferida no servidor: ela nunca fica no código do site.
+  async function submit(e) {
     e.preventDefault()
-    if (val === AGENDA_PASSWORD) {
-      onAuth()
-    } else {
-      setErr(true)
-      setVal('')
+    setLoading(true)
+    setErr(null)
+    try {
+      if (await validarSenhaAgenda(val)) {
+        onAuth(val)
+      } else {
+        setErr('Senha incorreta')
+        setVal('')
+      }
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -55,7 +69,7 @@ function PasswordScreen({ onAuth }) {
           <input
             type="password"
             value={val}
-            onChange={e => { setVal(e.target.value); setErr(false) }}
+            onChange={e => { setVal(e.target.value); setErr(null) }}
             placeholder="Senha"
             autoFocus
             className={`w-full border rounded-xl px-4 py-3 text-gray-900
@@ -68,15 +82,17 @@ function PasswordScreen({ onAuth }) {
           {err && (
             <p className="text-sm text-red-500 flex items-center gap-1.5 -mt-1">
               <i className="ti ti-alert-circle" />
-              Senha incorreta
+              {err}
             </p>
           )}
           <button
             type="submit"
-            className="w-full bg-brand-500 hover:bg-brand-600 text-white
-              font-semibold py-3 rounded-xl transition-colors"
+            disabled={loading || !val}
+            className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-gray-200
+              disabled:text-gray-400 text-white font-semibold py-3 rounded-xl
+              transition-colors flex items-center justify-center"
           >
-            Entrar
+            {loading ? <Spinner size="sm" color="white" /> : 'Entrar'}
           </button>
         </form>
       </div>
@@ -92,7 +108,7 @@ function AgendamentoModal({ ag, onClose }) {
   const rawPhone = ag.cliente_phone ?? ''
   const waPhone = '55' + rawPhone.replace(/\D/g, '')
   const servicosAg = getServicosDoAgendamento(ag)
-  const duracaoTotal = servicosAg.reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
+  const duracaoTotal = somaDuracao(servicosAg)
   const nomesServicos = servicosAg.map(s => s.nome).join(', ')
   const msgText =
     `Olá ${ag.cliente_nome}! Confirmando seu agendamento:\n` +
@@ -163,6 +179,11 @@ function Row({ icon, bg, color, label, children }) {
 
 // ─── Timeline ─────────────────────────────────────────────────────────────────
 
+const emMinutos = hhmm => {
+  const [h, m] = (hhmm ?? '00:00').split(':').map(Number)
+  return h * 60 + m
+}
+
 function Timeline({ agendamentos, loading }) {
   const [selected, setSelected] = useState(null)
 
@@ -174,41 +195,55 @@ function Timeline({ agendamentos, loading }) {
     )
   }
 
-  const byHora = {}
+  // Um atendimento longo ocupa vários slots da timeline, não só o primeiro.
+  const ocupacao = {}
   agendamentos.forEach(ag => {
-    byHora[ag.hora?.slice(0, 5)] = ag
+    const inicioStr = ag.hora?.slice(0, 5)
+    const inicio = emMinutos(inicioStr)
+    const duracao = somaDuracao(getServicosDoAgendamento(ag)) || 60
+    HOURS.forEach(h => {
+      const t = emMinutos(h)
+      if (t >= inicio && t < inicio + duracao) {
+        ocupacao[h] = { ag, inicioStr, duracao, isStart: h === inicioStr }
+      }
+    })
   })
 
   return (
     <>
       <div className="divide-y divide-gray-100">
         {HOURS.map(h => {
-          const ag = byHora[h]
+          const slot = ocupacao[h]
           return (
             <div key={h} className="flex items-center gap-3 py-2.5">
               <span className="text-xs font-mono text-gray-300 w-11 shrink-0 text-right">
                 {h}
               </span>
               <div className="w-px h-4 bg-gray-200 shrink-0" />
-              {ag ? (
-                (() => {
-                  const servicosAg = getServicosDoAgendamento(ag)
-                  const duracaoTotal = servicosAg.reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
-                  return (
-                    <button
-                      onClick={() => setSelected(ag)}
-                      className="flex-1 bg-brand-50 border border-brand-200 rounded-xl
-                        px-3 py-2 text-left hover:bg-brand-100 transition-colors"
-                    >
-                      <p className="text-sm font-semibold text-brand-700 leading-tight">
-                        {ag.cliente_nome}
-                      </p>
-                      <p className="text-xs text-brand-500 mt-0.5">
-                        {servicosAg.map(s => s.nome).join(', ')} · {duracaoTotal} min
-                      </p>
-                    </button>
-                  )
-                })()
+              {slot ? (
+                slot.isStart ? (
+                  <button
+                    onClick={() => setSelected(slot.ag)}
+                    className="flex-1 bg-brand-50 border border-brand-200 rounded-xl
+                      px-3 py-2 text-left hover:bg-brand-100 transition-colors"
+                  >
+                    <p className="text-sm font-semibold text-brand-700 leading-tight">
+                      {slot.ag.cliente_nome}
+                    </p>
+                    <p className="text-xs text-brand-500 mt-0.5">
+                      {getServicosDoAgendamento(slot.ag).map(s => s.nome).join(', ')}
+                      {' · '}{slot.duracao} min
+                    </p>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSelected(slot.ag)}
+                    className="flex-1 border border-dashed border-brand-200 rounded-xl
+                      px-3 py-2 text-left text-xs text-brand-400 hover:bg-brand-50 transition-colors"
+                  >
+                    em atendimento — {slot.ag.cliente_nome}
+                  </button>
+                )
               ) : (
                 <div className="flex-1 h-8" />
               )}
@@ -224,8 +259,10 @@ function Timeline({ agendamentos, loading }) {
 
 // ─── Página principal da agenda ───────────────────────────────────────────────
 
-export default function AgendaPage() {
-  const [authed, setAuthed] = useState(false)
+export default function AgendaPage({ active = true }) {
+  // A senha fica só em memória (nunca em localStorage) e é reenviada a cada
+  // consulta — é ela que autoriza a leitura dos dados no servidor.
+  const [senha, setSenha] = useState(null)
   const [date, setDate] = useState(() => {
     const d = new Date()
     d.setHours(0, 0, 0, 0)
@@ -233,12 +270,25 @@ export default function AgendaPage() {
   })
   const [tabIdx, setTabIdx] = useState(0)
 
-  const { funcionarias, loading: loadingF } = useFuncionarias()
+  const { funcionarias, loading: loadingF, error: errF } = useFuncionarias()
   const funcionaria = funcionarias[tabIdx]
   const isoDate = toLocalISODate(date)
-  const { agendamentos, loading: loadingA } = useAgendamentoDia(funcionaria?.id, isoDate)
+  const {
+    agendamentos,
+    loading: loadingA,
+    error: errA,
+    refetch,
+  } = useAgendaDoDia(senha, funcionaria?.id, isoDate)
 
-  if (!authed) return <PasswordScreen onAuth={() => setAuthed(true)} />
+  // Recarrega ao VOLTAR para esta aba (ex.: cliente cancelou enquanto isso).
+  // O useRef evita uma busca duplicada logo depois do login.
+  const estavaAtiva = useRef(active)
+  useEffect(() => {
+    if (active && !estavaAtiva.current && senha) refetch()
+    estavaAtiva.current = active
+  }, [active, senha, refetch])
+
+  if (!senha) return <PasswordScreen onAuth={setSenha} />
 
   function shiftDay(delta) {
     const d = new Date(date)
@@ -265,7 +315,14 @@ export default function AgendaPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Agenda</h1>
-            <p className="text-gray-400 text-sm">Gestão de horários</p>
+            <button
+              onClick={() => setSenha(null)}
+              className="text-gray-400 text-sm hover:text-gray-600 transition-colors
+                flex items-center gap-1"
+            >
+              <i className="ti ti-logout text-xs" />
+              Sair
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -289,6 +346,8 @@ export default function AgendaPage() {
             </button>
           </div>
         </div>
+
+        <ErrorBox className="mb-4" onRetry={refetch}>{errF || errA}</ErrorBox>
 
         {loadingF ? (
           <div className="flex justify-center py-16">

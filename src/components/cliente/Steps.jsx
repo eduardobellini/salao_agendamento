@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useServicos, useFuncionarias, useHorariosOcupados } from '../../hooks/useAgendamento'
 import { HOURS, DAYS, MONTHS, COR_MAP } from '../../lib/constants'
-import { BtnPrimary, BtnBack, SectionLabel, Spinner, EditBanner } from '../shared/UI'
+import { BtnPrimary, BtnBack, SectionLabel, Spinner, EditBanner, ErrorBox } from '../shared/UI'
 
 // ─── Utilitários ────────────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ function isSlotPast(iso, hora) {
 // ─── Step 1: Serviço ────────────────────────────────────────────────────────
 
 export function StepServico({ selected, onToggle, onNext, editMode, onCancelEdit }) {
-  const { servicos, loading } = useServicos()
+  const { servicos, loading, error } = useServicos()
 
   const selecionados = selected ?? []
   const isSel = id => selecionados.some(s => s.id === id)
@@ -45,6 +45,10 @@ export function StepServico({ selected, onToggle, onNext, editMode, onCancelEdit
       <p className="text-gray-500 text-sm mb-6">
         Selecione um ou mais serviços que deseja realizar
       </p>
+
+      <ErrorBox className="mb-4" onRetry={() => window.location.reload()}>
+        {error && 'Não foi possível carregar os serviços.'}
+      </ErrorBox>
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -126,7 +130,7 @@ export function StepFuncionaria({
   editMode,
   onCancelEdit,
 }) {
-  const { funcionarias, loading } = useFuncionarias()
+  const { funcionarias, loading, error } = useFuncionarias()
 
   return (
     <div>
@@ -134,6 +138,10 @@ export function StepFuncionaria({
 
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Qual profissional?</h1>
       <p className="text-gray-500 text-sm mb-6">Escolha com quem quer ser atendida</p>
+
+      <ErrorBox className="mb-4" onRetry={() => window.location.reload()}>
+        {error && 'Não foi possível carregar as profissionais.'}
+      </ErrorBox>
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -190,6 +198,7 @@ export function StepFuncionaria({
 
 export function StepDataHora({
   funcionariaId,
+  duracaoMin,
   reloadToken,
   selectedData,
   selectedHora,
@@ -206,7 +215,10 @@ export function StepDataHora({
   const [calYear, setCalYear] = useState(hoje.getFullYear())
   const [calMonth, setCalMonth] = useState(hoje.getMonth())
 
-  const { ocupados, loading: loadingSlots } = useHorariosOcupados(funcionariaId, selectedData, reloadToken)
+  // A duração total entra na consulta: um atendimento de 2h só cabe onde
+  // houver 2 horas livres seguidas.
+  const { ocupados, loading: loadingSlots, error: errSlots } =
+    useHorariosOcupados(funcionariaId, selectedData, duracaoMin, reloadToken)
   const cells = getMonthCalendar(calYear, calMonth)
   const isCurrentMonth = calYear === hoje.getFullYear() && calMonth === hoje.getMonth()
 
@@ -295,6 +307,14 @@ export function StepDataHora({
       {selectedData && (
         <>
           <SectionLabel>Horário</SectionLabel>
+          {duracaoMin > 60 && (
+            <p className="text-xs text-gray-400 -mt-2 mb-3">
+              Seu atendimento leva cerca de {Math.floor(duracaoMin / 60)}h
+              {duracaoMin % 60 ? `${duracaoMin % 60}` : ''} — só aparecem
+              horários com tempo livre suficiente.
+            </p>
+          )}
+          <ErrorBox className="mb-4">{errSlots}</ErrorBox>
           {loadingSlots ? (
             <div className="flex justify-center py-8">
               <Spinner />

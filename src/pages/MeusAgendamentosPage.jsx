@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAgendamentosCliente, cancelarAgendamento, getServicosDoAgendamento } from '../hooks/useAgendamento'
 import { DAYS, MONTHS, COR_MAP } from '../lib/constants'
-import { Spinner } from '../components/shared/UI'
+import { Spinner, ErrorBox } from '../components/shared/UI'
 
 function formatPhone(raw) {
   const digits = raw.replace(/\D/g, '').slice(0, 11)
@@ -26,7 +26,7 @@ export default function MeusAgendamentosPage() {
   const [cancelError, setCancelError] = useState(null)
 
   const digits = phoneInput.replace(/\D/g, '')
-  const { agendamentos, loading, refetch } = useAgendamentosCliente(searchPhone)
+  const { agendamentos, loading, error: loadError, refetch } = useAgendamentosCliente(searchPhone)
 
   function handleSearch(e) {
     e.preventDefault()
@@ -37,7 +37,8 @@ export default function MeusAgendamentosPage() {
     setLoadingCancel(true)
     setCancelError(null)
     try {
-      await cancelarAgendamento(id)
+      // O telefone é reenviado ao servidor: só o dono cancela o agendamento.
+      await cancelarAgendamento(id, searchPhone)
       setCancelingId(null)
       refetch()
     } catch (err) {
@@ -82,6 +83,8 @@ export default function MeusAgendamentosPage() {
           </form>
         </div>
 
+        <ErrorBox className="mb-4" onRetry={refetch}>{loadError}</ErrorBox>
+
         {/* Loading */}
         {loading && (
           <div className="flex justify-center py-12">
@@ -90,7 +93,7 @@ export default function MeusAgendamentosPage() {
         )}
 
         {/* Nenhum resultado */}
-        {!loading && searchPhone && agendamentos.length === 0 && (
+        {!loading && !loadError && searchPhone && agendamentos.length === 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center shadow-sm">
             <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <i className="ti ti-calendar-off text-2xl text-gray-400" />

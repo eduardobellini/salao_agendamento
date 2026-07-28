@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import AgendamentoPage from './pages/AgendamentoPage'
 import MeusAgendamentosPage from './pages/MeusAgendamentosPage'
+import AgendaPage from './pages/AgendaPage'
 
 const TABS = [
   { id: 'agendamento',       label: 'Agendar',       icon: 'calendar-plus'  },
   { id: 'meus-agendamentos', label: 'Meus horários', icon: 'calendar-user'  },
+  { id: 'agenda',            label: 'Agenda',        icon: 'lock'           },
 ]
 
 export default function App() {
@@ -19,7 +21,7 @@ export default function App() {
             <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
               <i className="ti ti-scissors text-white text-sm" />
             </div>
-            <span className="font-bold text-gray-900 text-sm">Salão de Beleza</span>
+            <span className="font-bold text-gray-900 text-sm">Mediterrâneo Cabelo</span>
           </div>
 
           {/* Abas no topo apenas no desktop */}
@@ -48,6 +50,9 @@ export default function App() {
         <div style={{ display: view === 'meus-agendamentos' ? 'block' : 'none' }}>
           <MeusAgendamentosPage />
         </div>
+        <div style={{ display: view === 'agenda' ? 'block' : 'none' }}>
+          <AgendaPage active={view === 'agenda'} />
+        </div>
       </main>
 
       {/* ── Navegação inferior (somente mobile) ── */}
@@ -55,7 +60,7 @@ export default function App() {
         className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-100
           shadow-[0_-1px_8px_rgba(0,0,0,0.04)] pb-safe"
       >
-        <div className="grid grid-cols-2">
+        <div className="grid grid-cols-3">
           {TABS.map(t => {
             const active = view === t.id
             return (

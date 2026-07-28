@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { StepServico, StepFuncionaria, StepDataHora, StepDados } from '../components/cliente/Steps'
 import { Resumo } from '../components/cliente/Resumo'
 import { StepIndicator } from '../components/shared/UI'
-import { criarAgendamento } from '../hooks/useAgendamento'
+import { criarAgendamento, somaDuracao } from '../hooks/useAgendamento'
 import { DAYS, MONTHS } from '../lib/constants'
 
 const TOTAL = 5
@@ -36,6 +36,7 @@ export default function AgendamentoPage({ active = true }) {
   const [success, setSuccess] = useState(false)
 
   const isEditing = editingStep !== null
+  const duracaoTotal = somaDuracao(servicos)
 
   // ── Navegação de edição ──────────────────────────────────────────────────
 
@@ -58,11 +59,12 @@ export default function AgendamentoPage({ active = true }) {
   // ── Seleções ─────────────────────────────────────────────────────────────
 
   function toggleServico(s) {
-    setServicos(prev =>
-      prev.some(x => x.id === s.id)
-        ? prev.filter(x => x.id !== s.id)
-        : [...prev, s],
-    )
+    const novo = servicos.some(x => x.id === s.id)
+      ? servicos.filter(x => x.id !== s.id)
+      : [...servicos, s]
+    setServicos(novo)
+    // Mudar os serviços muda a duração — o horário escolhido pode não caber mais.
+    if (somaDuracao(novo) !== duracaoTotal) setHora(null)
   }
 
   function handleSelectFuncionaria(f) {
@@ -76,9 +78,14 @@ export default function AgendamentoPage({ active = true }) {
 
   // ── Handlers de avanço ───────────────────────────────────────────────────
 
-  function next1() { isEditing ? saveAndReturn() : setStep(2) }
+  // Se a edição invalidou o horário (troca de profissional ou de duração),
+  // força reescolher antes de voltar ao resumo.
+  function next1() {
+    if (isEditing && (!data || !hora)) { setEditingStep(3); setStep(3) }
+    else if (isEditing) saveAndReturn()
+    else setStep(2)
+  }
   function next2() {
-    // Se a edição da profissional limpou data/horário, força reescolher o horário
     if (isEditing && (!data || !hora)) { setEditingStep(3); setStep(3) }
     else if (isEditing) saveAndReturn()
     else setStep(3)
@@ -193,6 +200,7 @@ export default function AgendamentoPage({ active = true }) {
           {step === 3 && (
             <StepDataHora
               funcionariaId={funcionaria?.id}
+              duracaoMin={duracaoTotal}
               reloadToken={availToken}
               selectedData={data}
               selectedHora={hora}

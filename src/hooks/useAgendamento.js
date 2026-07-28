@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 function toLocalISODate(date) {
@@ -6,6 +6,10 @@ function toLocalISODate(date) {
   const m = String(date.getMonth() + 1).padStart(2, '0')
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
+}
+
+export function soDigitos(v) {
+  return (v ?? '').replace(/\D/g, '')
 }
 
 // Extrai a lista de serviços de um agendamento, lidando com o novo formato
@@ -16,6 +20,10 @@ export function getServicosDoAgendamento(ag) {
     .filter(Boolean)
   if (lista.length) return lista
   return ag?.servicos ? [ag.servicos] : []
+}
+
+export function somaDuracao(servicos) {
+  return (servicos ?? []).reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
 }
 
 export function useServicos() {
@@ -60,9 +68,15 @@ export function useFuncionarias() {
   return { funcionarias, loading, error }
 }
 
-export function useHorariosOcupados(funcionariaId, data, reloadToken = 0) {
+/**
+ * Horários indisponíveis para um atendimento de `duracaoMin` minutos.
+ * O servidor considera a duração dos agendamentos já existentes — um
+ * serviço de 2h bloqueia os dois slots que ele ocupa, não só o primeiro.
+ */
+export function useHorariosOcupados(funcionariaId, data, duracaoMin = 60, reloadToken = 0) {
   const [ocupados, setOcupados] = useState([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [focusTick, setFocusTick] = useState(0)
 
   // Recarrega quando o usuário volta para a aba/app (ex.: cancelou em outro lugar)
@@ -85,47 +99,23 @@ export function useHorariosOcupados(funcionariaId, data, reloadToken = 0) {
     }
     let cancelled = false
     setLoading(true)
+    setError(null)
     supabase
-      .from('agendamentos')
-      .select('hora')
-      .eq('funcionaria_id', funcionariaId)
-      .eq('data', data)
-      .eq('status', 'confirmado')
-      .then(({ data: rows }) => {
+      .rpc('horarios_ocupados', {
+        p_funcionaria_id: funcionariaId,
+        p_data: data,
+        p_duracao_min: duracaoMin || 60,
+      })
+      .then(({ data: rows, error: err }) => {
         if (cancelled) return
-        setOcupados((rows ?? []).map(r => r.hora.slice(0, 5)))
+        if (err) setError('Não foi possível carregar os horários. Tente de novo.')
+        else setOcupados((rows ?? []).map(h => String(h).slice(0, 5)))
         setLoading(false)
       })
     return () => { cancelled = true }
-  }, [funcionariaId, data, reloadToken, focusTick])
+  }, [funcionariaId, data, duracaoMin, reloadToken, focusTick])
 
-  return { ocupados, loading }
-}
-
-export function useAgendamentoDia(funcionariaId, data) {
-  const [agendamentos, setAgendamentos] = useState([])
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!funcionariaId || !data) {
-      setAgendamentos([])
-      return
-    }
-    setLoading(true)
-    supabase
-      .from('agendamentos')
-      .select('*, servicos!agendamentos_servico_id_fkey(*), funcionarias(*), agendamento_servicos(servicos(*))')
-      .eq('funcionaria_id', funcionariaId)
-      .eq('data', data)
-      .eq('status', 'confirmado')
-      .order('hora')
-      .then(({ data: rows }) => {
-        setAgendamentos(rows ?? [])
-        setLoading(false)
-      })
-  }, [funcionariaId, data])
-
-  return { agendamentos, loading }
+  return { ocupados, loading, error }
 }
 
 export async function criarAgendamento({
@@ -141,44 +131,28 @@ export async function criarAgendamento({
   const lista = servicos ?? []
   if (lista.length === 0) throw new Error('Selecione ao menos um serviço.')
 
-  const { data: result, error } = await supabase
-    .from('agendamentos')
-    .insert({
-      funcionaria_id: funcionariaId,
-      servico_id: lista[0].id, // 1º serviço como fallback
-      cliente_nome: clienteNome,
-      cliente_phone: clientePhone.replace(/\D/g, ''),
-      data,
-      hora,
-      status: 'confirmado',
-    })
-    .select()
-    .single()
+  // Uma única chamada: o servidor valida os dados, checa conflito de horário
+  // considerando a duração e grava agendamento + serviços na mesma transação.
+  const { data: novoId, error } = await supabase.rpc('criar_agendamento', {
+    p_funcionaria_id: funcionariaId,
+    p_servico_ids: lista.map(s => s.id),
+    p_cliente_nome: clienteNome,
+    p_cliente_phone: soDigitos(clientePhone),
+    p_data: data,
+    p_hora: hora,
+  })
 
-  if (error) {
-    if (error.code === '23505') {
-      throw new Error('Este horário acabou de ser reservado. Escolha outro.')
-    }
-    throw new Error(error.message)
-  }
+  if (error) throw new Error(limparErro(error.message))
 
-  // Vincula todos os serviços ao agendamento
-  const { error: jErr } = await supabase
-    .from('agendamento_servicos')
-    .insert(lista.map(s => ({ agendamento_id: result.id, servico_id: s.id })))
-  if (jErr) console.warn('Falha ao vincular serviços:', jErr.message)
-
-  // Cria evento no Google Calendar e salva o ID no agendamento
+  // Cria o evento no Google Calendar (não bloqueia o agendamento se falhar)
   if (funcionariaNome) {
-    const duracaoMin = lista.reduce((acc, s) => acc + (s.duracao_min ?? 0), 0)
-    const precoTotal = lista.reduce((acc, s) => acc + Number(s.preco ?? 0), 0)
     supabase.functions
       .invoke('google-calendar', {
         body: {
-          agendamentoId: result.id,
+          agendamentoId: novoId,
           servicos: lista.map(s => ({ nome: s.nome, duracaoMin: s.duracao_min })),
-          duracaoMin,
-          precoTotal,
+          duracaoMin: somaDuracao(lista),
+          precoTotal: lista.reduce((acc, s) => acc + Number(s.preco ?? 0), 0),
           funcionariaNome,
           clienteNome,
           clientePhone,
@@ -189,7 +163,7 @@ export async function criarAgendamento({
       .catch(err => console.warn('Google Calendar sync falhou:', err))
   }
 
-  return result
+  return novoId
 }
 
 export function useAgendamentosCliente(phone) {
@@ -200,46 +174,88 @@ export function useAgendamentosCliente(phone) {
 
   useEffect(() => {
     if (!phone) { setAgendamentos([]); return }
+    let cancelled = false
     setLoading(true)
-    const today = toLocalISODate(new Date())
+    setError(null)
     supabase
-      .from('agendamentos')
-      .select('*, servicos!agendamentos_servico_id_fkey(*), funcionarias(*), agendamento_servicos(servicos(*))')
-      .eq('cliente_phone', phone)
-      .eq('status', 'confirmado')
-      .gte('data', today)
-      .order('data')
-      .order('hora')
+      .rpc('meus_agendamentos', { p_phone: soDigitos(phone) })
       .then(({ data: rows, error: err }) => {
-        if (err) setError(err.message)
+        if (cancelled) return
+        if (err) setError('Não foi possível carregar seus agendamentos.')
         else setAgendamentos(rows ?? [])
         setLoading(false)
       })
+    return () => { cancelled = true }
   }, [phone, tick])
 
   return { agendamentos, loading, error, refetch: () => setTick(t => t + 1) }
 }
 
-export async function cancelarAgendamento(id) {
-  // Busca o gcal_event_id antes de cancelar
-  const { data: ag } = await supabase
-    .from('agendamentos')
-    .select('gcal_event_id')
-    .eq('id', id)
-    .single()
-
-  const { error } = await supabase
-    .from('agendamentos')
-    .update({ status: 'cancelado' })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
+/** Cancela um agendamento. O telefone precisa bater com o do cadastro. */
+export async function cancelarAgendamento(id, phone) {
+  const { data: gcalEventId, error } = await supabase.rpc('cancelar_agendamento', {
+    p_id: id,
+    p_phone: soDigitos(phone),
+  })
+  if (error) throw new Error(limparErro(error.message))
 
   // Remove o evento do Google Calendar (fire-and-forget)
-  if (ag?.gcal_event_id) {
+  if (gcalEventId) {
     supabase.functions
       .invoke('google-calendar', {
-        body: { action: 'delete', gcalEventId: ag.gcal_event_id },
+        body: { action: 'delete', gcalEventId },
       })
       .catch(err => console.warn('Google Calendar delete falhou:', err))
   }
 }
+
+// ─── Área do salão ──────────────────────────────────────────────────────────
+
+/** Confere a senha da agenda no servidor. */
+export async function validarSenhaAgenda(senha) {
+  const { data, error } = await supabase.rpc('agenda_login', { p_senha: senha })
+  if (error) throw new Error('Não foi possível validar a senha. Tente de novo.')
+  return data === true
+}
+
+export function useAgendaDoDia(senha, funcionariaId, data) {
+  const [agendamentos, setAgendamentos] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    if (!senha || !funcionariaId || !data) {
+      setAgendamentos([])
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    supabase
+      .rpc('agenda_do_dia', {
+        p_senha: senha,
+        p_funcionaria_id: funcionariaId,
+        p_data: data,
+      })
+      .then(({ data: rows, error: err }) => {
+        if (cancelled) return
+        if (err) setError('Não foi possível carregar a agenda.')
+        else setAgendamentos(rows ?? [])
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [senha, funcionariaId, data, tick])
+
+  const refetch = useCallback(() => setTick(t => t + 1), [])
+
+  return { agendamentos, loading, error, refetch }
+}
+
+// Mensagens do Postgres chegam como "...: mensagem" — mostramos só a parte útil.
+function limparErro(msg) {
+  if (!msg) return 'Não foi possível concluir. Tente de novo.'
+  return msg.replace(/^.*\bERROR:\s*/i, '').trim()
+}
+
+export { toLocalISODate }

@@ -1,6 +1,9 @@
 -- ============================================================
---  Salão de Beleza — Schema Supabase
---  Execute este arquivo no SQL Editor do seu projeto Supabase
+--  Mediterrâneo Cabelo — Schema base
+--
+--  Instalação nova: execute ESTE arquivo no SQL Editor do Supabase
+--  e, em seguida, os arquivos de `supabase/migrations/` em ordem
+--  de data (eles criam as funções de segurança que o app usa).
 -- ============================================================
 
 -- Extensão para UUIDs
@@ -10,17 +13,17 @@ create extension if not exists "uuid-ossp";
 --  Tabelas
 -- ─────────────────────────────────────────────────────────────
 
-create table funcionarias (
-  id          uuid primary key default uuid_generate_v4(),
-  nome        text not null,
+create table if not exists funcionarias (
+  id            uuid primary key default uuid_generate_v4(),
+  nome          text not null,
   especialidade text not null,
-  initials    text not null,
-  cor         text not null check (cor in ('teal', 'pink', 'amber', 'purple')),
-  ativa       boolean not null default true,
-  created_at  timestamptz not null default now()
+  initials      text not null,
+  cor           text not null check (cor in ('teal', 'pink', 'amber', 'purple')),
+  ativa         boolean not null default true,
+  created_at    timestamptz not null default now()
 );
 
-create table servicos (
+create table if not exists servicos (
   id          uuid primary key default uuid_generate_v4(),
   nome        text not null,
   duracao_min integer not null,
@@ -31,7 +34,7 @@ create table servicos (
   created_at  timestamptz not null default now()
 );
 
-create table agendamentos (
+create table if not exists agendamentos (
   id              uuid primary key default uuid_generate_v4(),
   funcionaria_id  uuid not null references funcionarias (id),
   servico_id      uuid references servicos (id),  -- 1º serviço (fallback); a lista fica em agendamento_servicos
@@ -43,14 +46,17 @@ create table agendamentos (
                     check (status in ('confirmado', 'cancelado')),
   created_at      timestamptz not null default now(),
 
-  gcal_event_id   text,
-
-  -- garante que cada profissional só tem um agendamento por slot
-  constraint agendamentos_slot_unico unique (funcionaria_id, data, hora)
+  gcal_event_id   text
 );
 
+-- Cada profissional só pode ter um agendamento por slot.
+-- Índice PARCIAL: um horário cancelado volta a ficar disponível.
+create unique index if not exists agendamentos_slot_unico
+  on agendamentos (funcionaria_id, data, hora)
+  where status = 'confirmado';
+
 -- Serviços de cada agendamento (vários por agendamento)
-create table agendamento_servicos (
+create table if not exists agendamento_servicos (
   agendamento_id uuid not null references agendamentos (id) on delete cascade,
   servico_id     uuid not null references servicos (id),
   primary key (agendamento_id, servico_id)
@@ -58,41 +64,25 @@ create table agendamento_servicos (
 
 -- ─────────────────────────────────────────────────────────────
 --  Row Level Security
+--
+--  `funcionarias` e `servicos` são o catálogo público do salão.
+--  `agendamentos` e `agendamento_servicos` ficam SEM policy: contêm
+--  dados pessoais e só podem ser acessados pelas funções RPC criadas
+--  em supabase/migrations/ (que validam telefone ou senha).
 -- ─────────────────────────────────────────────────────────────
 
-alter table funcionarias        enable row level security;
-alter table servicos            enable row level security;
-alter table agendamentos        enable row level security;
+alter table funcionarias         enable row level security;
+alter table servicos             enable row level security;
+alter table agendamentos         enable row level security;
 alter table agendamento_servicos enable row level security;
 
--- Funcionárias: leitura pública (somente)
+drop policy if exists "funcionarias_select" on funcionarias;
 create policy "funcionarias_select"
   on funcionarias for select using (true);
 
--- Serviços: leitura pública (somente)
+drop policy if exists "servicos_select" on servicos;
 create policy "servicos_select"
   on servicos for select using (true);
-
--- Agendamentos: leitura pública (para checar disponibilidade)
-create policy "agendamentos_select"
-  on agendamentos for select using (true);
-
--- Agendamentos: inserção pública (clientes agendando)
-create policy "agendamentos_insert"
-  on agendamentos for insert with check (true);
-
--- Agendamentos: cliente pode cancelar (confirmado → cancelado)
-create policy "agendamentos_cancel"
-  on agendamentos for update
-  using (status = 'confirmado')
-  with check (status = 'cancelado');
-
--- Serviços do agendamento: leitura e inserção públicas
-create policy "agendamento_servicos_select"
-  on agendamento_servicos for select using (true);
-
-create policy "agendamento_servicos_insert"
-  on agendamento_servicos for insert with check (true);
 
 -- ─────────────────────────────────────────────────────────────
 --  Dados de exemplo — Funcionárias
