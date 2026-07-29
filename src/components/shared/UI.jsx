@@ -54,7 +54,8 @@ export function BtnPrimary({ children, onClick, disabled, loading, className = '
       disabled={disabled || loading}
       className={`w-full bg-brand-500 hover:bg-brand-600 active:bg-brand-700
         disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed
-        text-white font-semibold py-3.5 px-6 rounded-xl transition-colors
+        text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-300
+        hover:shadow-lg hover:shadow-brand-500/30 active:scale-[0.98]
         flex items-center justify-center gap-2 ${className}`}
     >
       {loading ? <Spinner size="sm" color="white" /> : children}
@@ -67,8 +68,8 @@ export function BtnBack({ children, onClick }) {
     <button
       onClick={onClick}
       className="w-full border border-gray-200 text-gray-600 font-medium py-3 px-6
-        rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors
-        flex items-center justify-center gap-2"
+        rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-all duration-300
+        active:scale-[0.98] flex items-center justify-center gap-2"
     >
       <i className="ti ti-arrow-left text-sm" />
       {children || 'Voltar'}

@@ -16,6 +16,10 @@ export default {
           700: '#0F6E56',
         },
       },
+      boxShadow: {
+        'soft': '0 4px 40px -2px rgba(0, 0, 0, 0.04)',
+        'float': '0 10px 40px -10px rgba(29, 158, 117, 0.15)',
+      },
     },
   },
   plugins: [],

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useAgendamentosCliente, cancelarAgendamento, getServicosDoAgendamento } from '../hooks/useAgendamento'
 import { DAYS, MONTHS, COR_MAP } from '../lib/constants'
 import { Spinner, ErrorBox } from '../components/shared/UI'
@@ -53,7 +54,11 @@ export default function MeusAgendamentosPage() {
       <div className="max-w-lg mx-auto">
 
         {/* Busca por telefone */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm mb-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/80 backdrop-blur-md rounded-3xl border border-gray-100/50 p-6 shadow-soft mb-4"
+        >
           <h1 className="text-xl font-bold text-gray-900 mb-1">Meus agendamentos</h1>
           <p className="text-gray-500 text-sm mb-5">
             Informe seu WhatsApp para ver e cancelar seus agendamentos
@@ -81,7 +86,7 @@ export default function MeusAgendamentosPage() {
               Buscar
             </button>
           </form>
-        </div>
+        </motion.div>
 
         <ErrorBox className="mb-4" onRetry={refetch}>{loadError}</ErrorBox>
 
@@ -107,14 +112,29 @@ export default function MeusAgendamentosPage() {
 
         {/* Lista de agendamentos */}
         {!loading && agendamentos.length > 0 && (
-          <div className="flex flex-col gap-3">
+          <motion.div 
+            initial="hidden" 
+            animate="visible"
+            variants={{
+              visible: { transition: { staggerChildren: 0.1 } },
+              hidden: {}
+            }}
+            className="flex flex-col gap-3"
+          >
             {agendamentos.map(ag => {
               const cor = COR_MAP[ag.funcionarias?.cor] ?? COR_MAP.teal
               const isConfirming = cancelingId === ag.id
               const servicosAg = getServicosDoAgendamento(ag)
 
               return (
-                <div key={ag.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+                <motion.div 
+                  key={ag.id} 
+                  variants={{
+                    hidden: { opacity: 0, y: 15 },
+                    visible: { opacity: 1, y: 0 }
+                  }}
+                  className="bg-white/80 backdrop-blur-md rounded-3xl border border-gray-100/50 p-5 shadow-soft transition-shadow hover:shadow-lg"
+                >
                   <div className="flex items-start gap-3 mb-4">
                     <div
                       className={`w-11 h-11 rounded-xl flex items-center justify-center
@@ -183,10 +203,10 @@ export default function MeusAgendamentosPage() {
                       </div>
                     </div>
                   )}
-                </div>
+                </motion.div>
               )
             })}
-          </div>
+          </motion.div>
         )}
       </div>
     </div>

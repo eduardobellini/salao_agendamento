@@ -1,21 +1,19 @@
 import { useState } from 'react'
 import AgendamentoPage from './pages/AgendamentoPage'
 import MeusAgendamentosPage from './pages/MeusAgendamentosPage'
-import AgendaPage from './pages/AgendaPage'
 
 const TABS = [
   { id: 'agendamento',       label: 'Agendar',       icon: 'calendar-plus'  },
   { id: 'meus-agendamentos', label: 'Meus horários', icon: 'calendar-user'  },
-  { id: 'agenda',            label: 'Agenda',        icon: 'lock'           },
 ]
 
 export default function App() {
   const [view, setView] = useState('agendamento')
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
+    <div className="min-h-screen font-sans">
       {/* ── Navbar superior ── */}
-      <nav className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+      <nav className="sticky top-0 z-40 bg-white/70 backdrop-blur-md border-b border-gray-200/50 shadow-soft">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
@@ -50,17 +48,14 @@ export default function App() {
         <div style={{ display: view === 'meus-agendamentos' ? 'block' : 'none' }}>
           <MeusAgendamentosPage />
         </div>
-        <div style={{ display: view === 'agenda' ? 'block' : 'none' }}>
-          <AgendaPage active={view === 'agenda'} />
-        </div>
       </main>
 
       {/* ── Navegação inferior (somente mobile) ── */}
       <nav
-        className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-100
-          shadow-[0_-1px_8px_rgba(0,0,0,0.04)] pb-safe"
+        className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/80 backdrop-blur-lg border-t border-gray-200/50
+          shadow-[0_-4px_24px_rgba(0,0,0,0.04)] pb-safe"
       >
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-2">
           {TABS.map(t => {
             const active = view === t.id
             return (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { StepServico, StepFuncionaria, StepDataHora, StepDados } from '../components/cliente/Steps'
 import { Resumo } from '../components/cliente/Resumo'
 import { StepIndicator } from '../components/shared/UI'
@@ -139,7 +140,11 @@ export default function AgendamentoPage({ active = true }) {
   if (success) {
     return (
       <div className="min-h-[calc(100vh-57px)] flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl border border-gray-200 p-8 max-w-sm w-full text-center shadow-sm">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="bg-white/90 backdrop-blur-md rounded-3xl border border-gray-100 p-8 max-w-sm w-full text-center shadow-float"
+        >
           <div className="w-20 h-20 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-5">
             <i className="ti ti-circle-check text-5xl text-brand-500" />
           </div>
@@ -159,11 +164,11 @@ export default function AgendamentoPage({ active = true }) {
           <button
             onClick={reset}
             className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold
-              py-3.5 rounded-xl transition-colors"
+              py-3.5 rounded-xl transition-all hover:shadow-lg hover:shadow-brand-500/30 active:scale-[0.98]"
           >
             Fazer novo agendamento
           </button>
-        </div>
+        </motion.div>
       </div>
     )
   }
@@ -175,71 +180,81 @@ export default function AgendamentoPage({ active = true }) {
       <div className="max-w-lg mx-auto">
         <StepIndicator current={step} total={TOTAL} />
 
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-          {step === 1 && (
-            <StepServico
-              selected={servicos}
-              onToggle={toggleServico}
-              onNext={next1}
-              editMode={isEditing}
-              onCancelEdit={cancelEdit}
-            />
-          )}
+        <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-gray-100/50 p-6 shadow-soft">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+            >
+              {step === 1 && (
+                <StepServico
+                  selected={servicos}
+                  onToggle={toggleServico}
+                  onNext={next1}
+                  editMode={isEditing}
+                  onCancelEdit={cancelEdit}
+                />
+              )}
 
-          {step === 2 && (
-            <StepFuncionaria
-              selected={funcionaria}
-              onSelect={handleSelectFuncionaria}
-              onNext={next2}
-              onBack={isEditing ? cancelEdit : () => setStep(1)}
-              editMode={isEditing}
-              onCancelEdit={cancelEdit}
-            />
-          )}
+              {step === 2 && (
+                <StepFuncionaria
+                  selected={funcionaria}
+                  onSelect={handleSelectFuncionaria}
+                  onNext={next2}
+                  onBack={isEditing ? cancelEdit : () => setStep(1)}
+                  editMode={isEditing}
+                  onCancelEdit={cancelEdit}
+                />
+              )}
 
-          {step === 3 && (
-            <StepDataHora
-              funcionariaId={funcionaria?.id}
-              duracaoMin={duracaoTotal}
-              reloadToken={availToken}
-              selectedData={data}
-              selectedHora={hora}
-              onSelectData={setData}
-              onSelectHora={setHora}
-              onNext={next3}
-              onBack={isEditing ? cancelEdit : () => setStep(2)}
-              editMode={isEditing}
-              onCancelEdit={cancelEdit}
-            />
-          )}
+              {step === 3 && (
+                <StepDataHora
+                  funcionariaId={funcionaria?.id}
+                  duracaoMin={duracaoTotal}
+                  reloadToken={availToken}
+                  selectedData={data}
+                  selectedHora={hora}
+                  onSelectData={setData}
+                  onSelectHora={setHora}
+                  onNext={next3}
+                  onBack={isEditing ? cancelEdit : () => setStep(2)}
+                  editMode={isEditing}
+                  onCancelEdit={cancelEdit}
+                />
+              )}
 
-          {step === 4 && (
-            <StepDados
-              nome={nome}
-              setNome={setNome}
-              phone={phone}
-              setPhone={setPhone}
-              onNext={next4}
-              onBack={isEditing ? cancelEdit : () => setStep(3)}
-              editMode={isEditing}
-              onCancelEdit={cancelEdit}
-            />
-          )}
+              {step === 4 && (
+                <StepDados
+                  nome={nome}
+                  setNome={setNome}
+                  phone={phone}
+                  setPhone={setPhone}
+                  onNext={next4}
+                  onBack={isEditing ? cancelEdit : () => setStep(3)}
+                  editMode={isEditing}
+                  onCancelEdit={cancelEdit}
+                />
+              )}
 
-          {step === 5 && (
-            <Resumo
-              servicos={servicos}
-              funcionaria={funcionaria}
-              data={data}
-              hora={hora}
-              nome={nome}
-              phone={phone}
-              onConfirm={handleConfirm}
-              onEdit={goToEdit}
-              loading={loading}
-              error={error}
-            />
-          )}
+              {step === 5 && (
+                <Resumo
+                  servicos={servicos}
+                  funcionaria={funcionaria}
+                  data={data}
+                  hora={hora}
+                  nome={nome}
+                  phone={phone}
+                  onConfirm={handleConfirm}
+                  onEdit={goToEdit}
+                  loading={loading}
+                  error={error}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </div>
