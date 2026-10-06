@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import { useServicos, useFuncionarias, useHorariosOcupados } from '../../hooks/useAgendamento'
 import { HOURS, DAYS, MONTHS, COR_MAP } from '../../lib/constants'
-import { BtnPrimary, BtnBack, SectionLabel, Spinner, EditBanner, ErrorBox } from '../shared/UI'
+import {
+  BtnPrimary,
+  BtnBack,
+  SectionLabel,
+  EditBanner,
+  ErrorBox,
+  PageTitle,
+  Skeleton,
+  SkeletonList,
+} from '../shared/UI'
 
 // ─── Utilitários ────────────────────────────────────────────────────────────
 
@@ -27,6 +36,27 @@ function isSlotPast(iso, hora) {
   return new Date(Y, M - 1, D, h, m) <= new Date()
 }
 
+function formatPrice(val) {
+  return `R$ ${Number(val).toFixed(2).replace('.', ',')}`
+}
+
+// Rodapé de ações comum a todas as etapas
+function StepActions({ onNext, onBack, disabled, editMode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <BtnPrimary onClick={onNext} disabled={disabled}>
+        {editMode ? 'Salvar e voltar ao resumo' : 'Continuar'}
+        {!editMode && <i className="ti ti-arrow-right text-sm" aria-hidden="true" />}
+      </BtnPrimary>
+      {onBack && (
+        <BtnBack onClick={onBack}>
+          {editMode ? 'Cancelar edição' : 'Voltar'}
+        </BtnBack>
+      )}
+    </div>
+  )
+}
+
 // ─── Step 1: Serviço ────────────────────────────────────────────────────────
 
 export function StepServico({ selected, onToggle, onNext, editMode, onCancelEdit }) {
@@ -41,53 +71,54 @@ export function StepServico({ selected, onToggle, onNext, editMode, onCancelEdit
     <div>
       {editMode && <EditBanner onCancel={onCancelEdit} />}
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Quais serviços?</h1>
-      <p className="text-gray-500 text-sm mb-6">
-        Selecione um ou mais serviços que deseja realizar
-      </p>
+      <PageTitle
+        title="Quais serviços?"
+        subtitle="Escolha um ou mais. Você pode combinar, por exemplo, corte e escova."
+      />
 
       <ErrorBox className="mb-4" onRetry={() => window.location.reload()}>
         {error && 'Não foi possível carregar os serviços.'}
       </ErrorBox>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
+        <SkeletonList count={4} className="flex flex-col gap-2.5 mb-6" />
       ) : (
-        <div className="flex flex-col gap-3 mb-6">
+        <div className="flex flex-col gap-2.5 mb-6">
           {servicos.map(s => {
             const sel = isSel(s.id)
             return (
               <button
                 key={s.id}
                 onClick={() => onToggle(s)}
-                className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left
-                  active:scale-[0.98]
+                aria-pressed={sel}
+                className={`group flex items-center gap-4 p-3.5 pr-4 rounded-2xl text-left
+                  transition-all duration-200 active:scale-[0.985]
                   ${sel
-                    ? 'border-brand-500 bg-brand-50'
-                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                    ? 'bg-brand-50 ring-2 ring-inset ring-brand-500'
+                    : 'bg-white ring-1 ring-inset ring-gray-200 hover:ring-gray-300 hover:bg-gray-50'
                   }`}
               >
                 <div
                   className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0
-                    ${sel ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}
+                    transition-colors duration-200
+                    ${sel ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-white'}`}
                 >
-                  <i className={`ti ti-${s.icone}`} />
+                  <i className={`ti ti-${s.icone}`} aria-hidden="true" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">{s.nome}</p>
-                  <p className="text-sm text-gray-400">{s.duracao_min} min</p>
+                  <p className="font-semibold text-gray-900 leading-tight">{s.nome}</p>
+                  <p className="text-sm text-gray-500 mt-0.5 tabular-nums">{s.duracao_min} min</p>
                 </div>
-                <p className="font-bold text-gray-900 text-sm whitespace-nowrap shrink-0">
-                  R$ {Number(s.preco).toFixed(2).replace('.', ',')}
+                <p className="font-semibold text-gray-900 text-sm whitespace-nowrap shrink-0 tabular-nums">
+                  {formatPrice(s.preco)}
                 </p>
                 <div
-                  className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0
-                    transition-colors
+                  aria-hidden="true"
+                  className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0
+                    transition-all duration-200
                     ${sel
-                      ? 'bg-brand-500 border-brand-500 text-white'
-                      : 'border-gray-300 bg-white'
+                      ? 'bg-brand-500 text-white scale-100'
+                      : 'ring-1 ring-inset ring-gray-300 bg-white'
                     }`}
                 >
                   {sel && <i className="ti ti-check text-sm" />}
@@ -100,22 +131,23 @@ export function StepServico({ selected, onToggle, onNext, editMode, onCancelEdit
 
       {/* Resumo da seleção */}
       {selecionados.length > 0 && (
-        <div className="flex items-center justify-between bg-brand-50 border border-brand-100
-          rounded-xl px-4 py-3 mb-4 text-sm">
-          <span className="text-gray-600">
+        <div
+          aria-live="polite"
+          className="flex items-center justify-between bg-gray-100 rounded-xl px-4 py-3 mb-4 text-sm"
+        >
+          <span className="text-gray-600 tabular-nums">
             {selecionados.length} {selecionados.length === 1 ? 'serviço' : 'serviços'}
-            {duracaoTotal > 0 && <span className="text-gray-400"> · {duracaoTotal} min</span>}
+            {duracaoTotal > 0 && <span className="text-gray-500"> · {duracaoTotal} min</span>}
           </span>
-          <span className="font-bold text-brand-600">
-            R$ {total.toFixed(2).replace('.', ',')}
-          </span>
+          <span className="font-semibold text-gray-900 tabular-nums">{formatPrice(total)}</span>
         </div>
       )}
 
-      <BtnPrimary onClick={onNext} disabled={selecionados.length === 0}>
-        {editMode ? 'Salvar e voltar ao resumo' : 'Continuar'}
-        {!editMode && <i className="ti ti-arrow-right text-sm" />}
-      </BtnPrimary>
+      <StepActions
+        onNext={onNext}
+        disabled={selecionados.length === 0}
+        editMode={editMode}
+      />
     </div>
   )
 }
@@ -136,19 +168,16 @@ export function StepFuncionaria({
     <div>
       {editMode && <EditBanner onCancel={onCancelEdit} />}
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Qual profissional?</h1>
-      <p className="text-gray-500 text-sm mb-6">Escolha com quem quer ser atendida</p>
+      <PageTitle title="Com quem?" subtitle="Escolha a profissional que vai te atender." />
 
       <ErrorBox className="mb-4" onRetry={() => window.location.reload()}>
         {error && 'Não foi possível carregar as profissionais.'}
       </ErrorBox>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
+        <SkeletonList count={4} className="grid grid-cols-2 gap-2.5 mb-6" itemClassName="h-[136px] rounded-2xl" />
       ) : (
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-2 gap-2.5 mb-6">
           {funcionarias.map(f => {
             const cor = COR_MAP[f.cor] ?? COR_MAP.teal
             const sel = selected?.id === f.id
@@ -156,40 +185,36 @@ export function StepFuncionaria({
               <button
                 key={f.id}
                 onClick={() => onSelect(f)}
-                className={`p-4 rounded-xl border-2 transition-all text-center relative
+                aria-pressed={sel}
+                className={`p-4 pt-5 rounded-2xl text-center relative transition-all duration-200
                   active:scale-[0.98]
                   ${sel
-                    ? 'border-brand-500 bg-brand-50'
-                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                    ? 'bg-brand-50 ring-2 ring-inset ring-brand-500'
+                    : 'bg-white ring-1 ring-inset ring-gray-200 hover:ring-gray-300 hover:bg-gray-50'
                   }`}
               >
                 {sel && (
-                  <i className="ti ti-circle-check-filled text-brand-500 absolute top-2 right-2 text-base" />
+                  <i
+                    className="ti ti-circle-check-filled text-brand-500 absolute top-2.5 right-2.5 text-lg"
+                    aria-hidden="true"
+                  />
                 )}
                 <div
-                  className={`w-14 h-14 rounded-full flex items-center justify-center
-                    text-xl font-bold mx-auto mb-3 transition-all
+                  className={`w-14 h-14 rounded-[18px] flex items-center justify-center
+                    font-display text-xl font-medium mx-auto mb-3 transition-colors duration-200
                     ${sel ? 'bg-brand-500 text-white' : `${cor.bg} ${cor.text}`}`}
                 >
                   {f.initials}
                 </div>
                 <p className="font-semibold text-gray-900 text-sm leading-tight">{f.nome}</p>
-                <p className="text-xs text-gray-400 mt-0.5 leading-tight">{f.especialidade}</p>
+                <p className="text-xs text-gray-500 mt-1 leading-snug">{f.especialidade}</p>
               </button>
             )
           })}
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <BtnPrimary onClick={onNext} disabled={!selected}>
-          {editMode ? 'Salvar e voltar ao resumo' : 'Continuar'}
-          {!editMode && <i className="ti ti-arrow-right text-sm" />}
-        </BtnPrimary>
-        <BtnBack onClick={onBack}>
-          {editMode ? 'Cancelar edição' : 'Voltar'}
-        </BtnBack>
-      </div>
+      <StepActions onNext={onNext} onBack={onBack} disabled={!selected} editMode={editMode} />
     </div>
   )
 }
@@ -211,6 +236,7 @@ export function StepDataHora({
 }) {
   const hoje = new Date()
   hoje.setHours(0, 0, 0, 0)
+  const hojeIso = toLocalISODate(hoje)
 
   const [calYear, setCalYear] = useState(hoje.getFullYear())
   const [calMonth, setCalMonth] = useState(hoje.getMonth())
@@ -221,6 +247,11 @@ export function StepDataHora({
     useHorariosOcupados(funcionariaId, selectedData, duracaoMin, reloadToken)
   const cells = getMonthCalendar(calYear, calMonth)
   const isCurrentMonth = calYear === hoje.getFullYear() && calMonth === hoje.getMonth()
+
+  const slots = selectedData
+    ? HOURS.map(h => ({ h, disabled: ocupados.includes(h) || isSlotPast(selectedData, h) }))
+    : []
+  const semHorarios = !loadingSlots && !errSlots && slots.length > 0 && slots.every(s => s.disabled)
 
   function prevMonth() {
     if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) }
@@ -240,102 +271,116 @@ export function StepDataHora({
     <div>
       {editMode && <EditBanner onCancel={onCancelEdit} />}
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Quando?</h1>
-      <p className="text-gray-500 text-sm mb-6">Escolha data e horário disponíveis</p>
-
-      <SectionLabel>Data</SectionLabel>
+      <PageTitle title="Quando fica bom?" subtitle="Escolha o dia e depois um horário livre." />
 
       {/* Navegação de mês */}
       <div className="flex items-center justify-between mb-3">
-        <button
-          onClick={prevMonth}
-          disabled={isCurrentMonth}
-          aria-label="Mês anterior"
-          className="w-10 h-10 rounded-lg flex items-center justify-center active:scale-95
-            hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
-        >
-          <i className="ti ti-chevron-left text-lg text-gray-600" />
-        </button>
-        <span className="text-sm font-semibold text-gray-700 capitalize">
-          {MONTHS[calMonth]} {calYear}
-        </span>
-        <button
-          onClick={nextMonth}
-          aria-label="Próximo mês"
-          className="w-10 h-10 rounded-lg flex items-center justify-center active:scale-95 hover:bg-gray-100 transition"
-        >
-          <i className="ti ti-chevron-right text-lg text-gray-600" />
-        </button>
+        <h2 className="font-display text-lg font-medium tracking-tight text-gray-900" aria-live="polite">
+          {MONTHS[calMonth]} <span className="text-gray-400 tabular-nums">{calYear}</span>
+        </h2>
+        <div className="flex gap-1">
+          <button
+            onClick={prevMonth}
+            disabled={isCurrentMonth}
+            aria-label="Mês anterior"
+            className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95
+              hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition"
+          >
+            <i className="ti ti-chevron-left text-lg text-gray-600" />
+          </button>
+          <button
+            onClick={nextMonth}
+            aria-label="Próximo mês"
+            className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 hover:bg-gray-100 transition"
+          >
+            <i className="ti ti-chevron-right text-lg text-gray-600" />
+          </button>
+        </div>
       </div>
 
       {/* Cabeçalho dias da semana */}
-      <div className="grid grid-cols-7 gap-1 mb-1">
+      <div className="grid grid-cols-7 gap-1 mb-1" aria-hidden="true">
         {DAYS.map(d => (
-          <div key={d} className="text-center text-[10px] font-medium text-gray-400 uppercase py-1">
+          <div key={d} className="text-center text-[11px] font-medium text-gray-400 py-1">
             {d}
           </div>
         ))}
       </div>
 
       {/* Grade de dias */}
-      <div className="grid grid-cols-7 gap-1 mb-6">
+      <div className="grid grid-cols-7 gap-1 mb-7">
         {cells.map((d, i) => {
           if (!d) return <div key={`e-${i}`} />
           const disabled = d.getDay() === 0 || d < hoje
           const iso = toLocalISODate(d)
           const sel = selectedData === iso
+          const isHoje = iso === hojeIso
           return (
             <button
               key={iso}
               disabled={disabled}
               onClick={() => handleSelectData(iso)}
-              className={`min-h-[44px] rounded-xl border transition-all text-sm font-medium
-                active:scale-95
+              aria-pressed={sel}
+              aria-label={`${DAYS[d.getDay()]}, ${d.getDate()} de ${MONTHS[d.getMonth()]}`}
+              className={`relative min-h-[44px] rounded-xl transition-all duration-200 text-sm font-medium
+                tabular-nums active:scale-95
                 ${disabled
-                  ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                  ? 'text-gray-300 cursor-not-allowed'
                   : sel
-                  ? 'border-brand-500 bg-brand-500 text-white'
-                  : 'border-gray-200 bg-white text-gray-700 hover:border-brand-300'
+                  ? 'bg-brand-500 text-white shadow-brand'
+                  : 'bg-white text-gray-800 ring-1 ring-inset ring-gray-200 hover:ring-brand-300 hover:bg-brand-50'
                 }`}
             >
               {d.getDate()}
+              {isHoje && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full
+                    ${sel ? 'bg-white' : 'bg-brand-500'}`}
+                />
+              )}
             </button>
           )
         })}
       </div>
 
-      {selectedData && (
-        <>
-          <SectionLabel>Horário</SectionLabel>
+      {selectedData ? (
+        <div className="mb-6">
+          <SectionLabel>Horários livres</SectionLabel>
           {duracaoMin > 60 && (
-            <p className="text-xs text-gray-400 -mt-2 mb-3">
+            <p className="text-sm text-gray-500 -mt-1.5 mb-3">
               Seu atendimento leva cerca de {Math.floor(duracaoMin / 60)}h
-              {duracaoMin % 60 ? `${duracaoMin % 60}` : ''} — só aparecem
+              {duracaoMin % 60 ? `${duracaoMin % 60}` : ''}, então só mostramos
               horários com tempo livre suficiente.
             </p>
           )}
           <ErrorBox className="mb-4">{errSlots}</ErrorBox>
           {loadingSlots ? (
-            <div className="flex justify-center py-8">
-              <Spinner />
+            <div role="status" aria-label="Carregando horários" className="grid grid-cols-3 gap-2">
+              {HOURS.map(h => <Skeleton key={h} className="h-12 rounded-xl" />)}
+            </div>
+          ) : semHorarios ? (
+            <div className="bg-gray-100 rounded-xl px-4 py-5 text-center">
+              <p className="text-sm font-medium text-gray-800">Nenhum horário livre neste dia</p>
+              <p className="text-sm text-gray-500 mt-0.5">Tente outro dia ou outra profissional.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              {HOURS.map(h => {
-                const disabled = ocupados.includes(h) || isSlotPast(selectedData, h)
+            <div className="grid grid-cols-3 gap-2">
+              {slots.map(({ h, disabled }) => {
                 const sel = selectedHora === h
                 return (
                   <button
                     key={h}
                     disabled={disabled}
                     onClick={() => onSelectHora(h)}
-                    className={`min-h-[48px] rounded-xl border text-sm font-medium transition-all
-                      active:scale-95
+                    aria-pressed={sel}
+                    className={`min-h-[48px] rounded-xl text-sm font-medium transition-all duration-200
+                      tabular-nums active:scale-95
                       ${disabled
-                        ? 'border-gray-100 bg-gray-50 text-gray-300 line-through cursor-not-allowed'
+                        ? 'text-gray-300 line-through decoration-gray-300 cursor-not-allowed bg-gray-100/60'
                         : sel
-                        ? 'border-brand-500 bg-brand-500 text-white'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-brand-300'
+                        ? 'bg-brand-500 text-white shadow-brand'
+                        : 'bg-white text-gray-800 ring-1 ring-inset ring-gray-200 hover:ring-brand-300 hover:bg-brand-50'
                       }`}
                   >
                     {h}
@@ -344,18 +389,20 @@ export function StepDataHora({
               })}
             </div>
           )}
-        </>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500 mb-6 flex items-center gap-2">
+          <i className="ti ti-hand-finger text-base text-gray-400" aria-hidden="true" />
+          Toque em um dia para ver os horários.
+        </p>
       )}
 
-      <div className="flex flex-col gap-3">
-        <BtnPrimary onClick={onNext} disabled={!selectedData || !selectedHora}>
-          {editMode ? 'Salvar e voltar ao resumo' : 'Continuar'}
-          {!editMode && <i className="ti ti-arrow-right text-sm" />}
-        </BtnPrimary>
-        <BtnBack onClick={onBack}>
-          {editMode ? 'Cancelar edição' : 'Voltar'}
-        </BtnBack>
-      </div>
+      <StepActions
+        onNext={onNext}
+        onBack={onBack}
+        disabled={!selectedData || !selectedHora}
+        editMode={editMode}
+      />
     </div>
   )
 }
@@ -371,6 +418,15 @@ function formatPhone(raw) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
 }
 
+const inputBase = `w-full rounded-xl py-3 text-gray-900 bg-white ring-1 ring-inset
+  placeholder:text-gray-400 focus:outline-none focus:ring-2 transition`
+
+function inputState(invalid) {
+  return invalid
+    ? 'ring-red-300 focus:ring-red-400'
+    : 'ring-gray-200 hover:ring-gray-300 focus:ring-brand-500'
+}
+
 export function StepDados({
   nome,
   setNome,
@@ -381,63 +437,80 @@ export function StepDados({
   editMode,
   onCancelEdit,
 }) {
-  const valid = nome.trim().length > 2 && phone.replace(/\D/g, '').length >= 10
+  const [touched, setTouched] = useState({ nome: false, phone: false })
+
+  const nomeOk = nome.trim().length > 2
+  const phoneOk = phone.replace(/\D/g, '').length >= 10
+  const valid = nomeOk && phoneOk
+
+  const nomeErr = touched.nome && !nomeOk
+  const phoneErr = touched.phone && !phoneOk
 
   return (
     <div>
       {editMode && <EditBanner onCancel={onCancelEdit} />}
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Seus dados</h1>
-      <p className="text-gray-500 text-sm mb-6">
-        Para confirmarmos seu agendamento
-      </p>
+      <PageTitle
+        title="Quase lá"
+        subtitle="Usamos seu WhatsApp só para falar sobre este horário."
+      />
 
       <div className="flex flex-col gap-4 mb-6">
         <div>
-          <label className="text-sm font-medium text-gray-700 block mb-1.5">
+          <label htmlFor="cliente-nome" className="text-sm font-medium text-gray-700 block mb-1.5">
             Nome completo
           </label>
           <input
+            id="cliente-nome"
             type="text"
             value={nome}
             onChange={e => setNome(e.target.value)}
-            placeholder="Maria Silva"
+            onBlur={() => setTouched(t => ({ ...t, nome: true }))}
+            placeholder="Ana Beatriz Lopes"
             autoComplete="name"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-900
-              placeholder:text-gray-300 focus:outline-none focus:border-brand-500
-              focus:ring-2 focus:ring-brand-100 transition"
+            aria-invalid={nomeErr || undefined}
+            aria-describedby={nomeErr ? 'cliente-nome-erro' : undefined}
+            className={`${inputBase} px-4 ${inputState(nomeErr)}`}
           />
+          {nomeErr && (
+            <p id="cliente-nome-erro" className="text-sm text-red-600 mt-1.5">
+              Digite seu nome com pelo menos 3 letras.
+            </p>
+          )}
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-700 block mb-1.5">
+          <label htmlFor="cliente-phone" className="text-sm font-medium text-gray-700 block mb-1.5">
             WhatsApp
           </label>
           <div className="relative">
-            <i className="ti ti-brand-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <i
+              className="ti ti-brand-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+              aria-hidden="true"
+            />
             <input
+              id="cliente-phone"
               type="tel"
+              inputMode="tel"
               value={phone}
               onChange={e => setPhone(formatPhone(e.target.value))}
-              placeholder="(11) 99999-9999"
+              onBlur={() => setTouched(t => ({ ...t, phone: true }))}
+              placeholder="(21) 98436-1207"
               autoComplete="tel"
-              className="w-full border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-gray-900
-                placeholder:text-gray-300 focus:outline-none focus:border-brand-500
-                focus:ring-2 focus:ring-brand-100 transition"
+              aria-invalid={phoneErr || undefined}
+              aria-describedby={phoneErr ? 'cliente-phone-erro' : undefined}
+              className={`${inputBase} pl-10 pr-4 tabular-nums ${inputState(phoneErr)}`}
             />
           </div>
+          {phoneErr && (
+            <p id="cliente-phone-erro" className="text-sm text-red-600 mt-1.5">
+              Informe o número com DDD, por exemplo (21) 98436-1207.
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <BtnPrimary onClick={onNext} disabled={!valid}>
-          {editMode ? 'Salvar e voltar ao resumo' : 'Continuar'}
-          {!editMode && <i className="ti ti-arrow-right text-sm" />}
-        </BtnPrimary>
-        <BtnBack onClick={onBack}>
-          {editMode ? 'Cancelar edição' : 'Voltar'}
-        </BtnBack>
-      </div>
+      <StepActions onNext={onNext} onBack={onBack} disabled={!valid} editMode={editMode} />
     </div>
   )
 }

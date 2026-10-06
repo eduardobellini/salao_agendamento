@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { StepServico, StepFuncionaria, StepDataHora, StepDados } from '../components/cliente/Steps'
 import { Resumo } from '../components/cliente/Resumo'
-import { StepIndicator } from '../components/shared/UI'
+import { StepIndicator, BtnPrimary } from '../components/shared/UI'
 import { criarAgendamento, somaDuracao } from '../hooks/useAgendamento'
 import { DAYS, MONTHS } from '../lib/constants'
 
 const TOTAL = 5
+const STEP_LABELS = ['Serviços', 'Profissional', 'Data e horário', 'Seus dados', 'Confirmação']
 
 function formatDateBR(iso) {
   if (!iso) return ''
@@ -139,35 +140,47 @@ export default function AgendamentoPage({ active = true }) {
 
   if (success) {
     return (
-      <div className="min-h-[calc(100vh-57px)] flex items-center justify-center p-6">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+      <div className="min-h-[calc(100dvh-57px)] flex items-center justify-center px-4 pt-8 pb-12">
+        <motion.div
+          role="status"
+          initial={{ opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          className="bg-white/90 backdrop-blur-md rounded-3xl border border-gray-100 p-8 max-w-sm w-full text-center shadow-float"
+          transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+          className="bg-white rounded-[28px] ring-1 ring-gray-900/5 p-8 max-w-sm w-full text-center shadow-float"
         >
-          <div className="w-20 h-20 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-5">
-            <i className="ti ti-circle-check text-5xl text-brand-500" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Agendado com sucesso!</h2>
-          <div className="text-gray-500 text-sm space-y-1 mb-8">
-            <p>
-              <span className="font-semibold text-gray-700">
-                {servicos.map(s => s.nome).join(', ')}
-              </span>{' '}
-              com <span className="font-semibold text-gray-700">{funcionaria?.nome}</span>
-            </p>
-            <p>
-              {formatDateBR(data)} às{' '}
-              <span className="font-semibold text-gray-700">{hora}</span>
-            </p>
-          </div>
-          <button
-            onClick={reset}
-            className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold
-              py-3.5 rounded-xl transition-all hover:shadow-lg hover:shadow-brand-500/30 active:scale-[0.98]"
+          <motion.div
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 16, delay: 0.12 }}
+            className="w-16 h-16 bg-brand-500 rounded-[20px] flex items-center justify-center mx-auto mb-6 shadow-brand"
           >
-            Fazer novo agendamento
-          </button>
+            <i className="ti ti-check text-3xl text-white" aria-hidden="true" />
+          </motion.div>
+          <h2 className="font-display text-[1.75rem] leading-tight font-medium tracking-tight text-gray-900 mb-2">
+            Horário reservado
+          </h2>
+          <p className="text-gray-500 text-[15px] mb-6">Te esperamos no salão.</p>
+
+          <div className="bg-gray-50 rounded-2xl p-4 text-left text-sm space-y-2.5 mb-7">
+            <div className="flex items-start gap-2.5">
+              <i className="ti ti-calendar-event text-gray-400 mt-0.5" aria-hidden="true" />
+              <p className="text-gray-900 font-semibold tabular-nums">
+                {formatDateBR(data)} às {hora}
+              </p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <i className="ti ti-scissors text-gray-400 mt-0.5" aria-hidden="true" />
+              <p className="text-gray-600">
+                {servicos.map(s => s.nome).join(', ')} com{' '}
+                <span className="font-medium text-gray-900">{funcionaria?.nome}</span>
+              </p>
+            </div>
+          </div>
+
+          <BtnPrimary onClick={reset}>Fazer outro agendamento</BtnPrimary>
+          <p className="text-xs text-gray-500 mt-4">
+            Para ver ou cancelar, use a aba “Meus horários”.
+          </p>
         </motion.div>
       </div>
     )
@@ -176,18 +189,18 @@ export default function AgendamentoPage({ active = true }) {
   // ── Fluxo principal ──────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-[calc(100vh-57px)] py-8 px-4">
+    <div className="min-h-[calc(100dvh-57px)] pt-6 pb-12 sm:pt-10 px-4">
       <div className="max-w-lg mx-auto">
-        <StepIndicator current={step} total={TOTAL} />
+        <StepIndicator current={step} total={TOTAL} labels={STEP_LABELS} />
 
-        <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-gray-100/50 p-6 shadow-soft">
+        <div className="bg-white/90 backdrop-blur-md rounded-[28px] ring-1 ring-gray-900/5 p-5 pt-6 pb-5 sm:p-8 shadow-soft">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
-              initial={{ opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
             >
               {step === 1 && (
                 <StepServico

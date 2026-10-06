@@ -7,7 +7,7 @@ import {
   getServicosDoAgendamento,
   somaDuracao,
 } from '../hooks/useAgendamento'
-import { Spinner, Modal, ErrorBox } from '../components/shared/UI'
+import { Spinner, Modal, ErrorBox, Skeleton, SkeletonList } from '../components/shared/UI'
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ function PasswordScreen({ onAuth }) {
       if (await validarSenhaAgenda(val)) {
         onAuth(val)
       } else {
-        setErr('Senha incorreta')
+        setErr('Senha incorreta. Tente de novo.')
         setVal('')
       }
     } catch (e) {
@@ -56,12 +56,12 @@ function PasswordScreen({ onAuth }) {
   }
 
   return (
-    <div className="min-h-[calc(100vh-57px)] flex items-center justify-center p-6">
-      <div className="bg-white rounded-2xl border border-gray-200 p-8 max-w-sm w-full shadow-sm">
+    <div className="min-h-[calc(100dvh-57px)] flex items-center justify-center p-6">
+      <div className="bg-white rounded-[28px] ring-1 ring-gray-900/5 p-8 max-w-sm w-full shadow-soft">
         <div className="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
           <i className="ti ti-lock text-brand-500 text-2xl" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900 text-center mb-1">Área restrita</h2>
+        <h2 className="font-display text-2xl font-medium tracking-tight text-gray-900 text-center mb-1">Área restrita</h2>
         <p className="text-gray-400 text-sm text-center mb-6">
           Digite a senha para acessar a agenda
         </p>
@@ -124,24 +124,24 @@ function AgendamentoModal({ ag, onClose }) {
       <div className="flex flex-col gap-3">
         <Row
           icon="scissors"
-          bg="bg-brand-50"
-          color="text-brand-500"
+          bg="bg-gray-100"
+          color="text-gray-600"
           label={servicosAg.length > 1 ? 'Serviços' : 'Serviço'}
         >
           <p className="font-semibold text-gray-900 text-sm">{nomesServicos}</p>
           <p className="text-xs text-gray-400">{duracaoTotal} minutos no total</p>
         </Row>
 
-        <Row icon="clock" bg="bg-blue-50" color="text-blue-500" label="Horário">
+        <Row icon="clock" bg="bg-gray-100" color="text-gray-600" label="Horário">
           <p className="font-semibold text-gray-900 text-sm">{ag.hora?.slice(0, 5)}</p>
           <p className="text-xs text-gray-400">{ag.data}</p>
         </Row>
 
-        <Row icon="user-circle" bg="bg-gray-100" color="text-gray-500" label="Profissional">
+        <Row icon="user-circle" bg="bg-gray-100" color="text-gray-600" label="Profissional">
           <p className="font-semibold text-gray-900 text-sm">{ag.funcionarias?.nome}</p>
         </Row>
 
-        <Row icon="brand-whatsapp" bg="bg-green-50" color="text-green-500" label="WhatsApp">
+        <Row icon="brand-whatsapp" bg="bg-gray-100" color="text-gray-600" label="WhatsApp">
           <p className="font-semibold text-gray-900 text-sm">
             {formatPhoneDisplay(rawPhone)}
           </p>
@@ -151,9 +151,9 @@ function AgendamentoModal({ ag, onClose }) {
           href={waUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center justify-center gap-2 w-full bg-green-500
-            hover:bg-green-600 text-white font-semibold py-3 rounded-xl
-            transition-colors mt-2"
+          className="flex items-center justify-center gap-2 w-full bg-brand-500
+            hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3.5 rounded-2xl shadow-brand
+            transition-all mt-2"
         >
           <i className="ti ti-brand-whatsapp" />
           Abrir conversa no WhatsApp
@@ -166,11 +166,11 @@ function AgendamentoModal({ ag, onClose }) {
 function Row({ icon, bg, color, label, children }) {
   return (
     <div className="flex items-start gap-3">
-      <div className={`w-9 h-9 ${bg} rounded-lg flex items-center justify-center shrink-0`}>
+      <div className={`w-9 h-9 ${bg} rounded-xl flex items-center justify-center shrink-0`}>
         <i className={`ti ti-${icon} ${color}`} />
       </div>
       <div>
-        <p className="text-xs text-gray-400 font-medium mb-0.5">{label}</p>
+        <p className="text-xs text-gray-500 font-medium mb-0.5">{label}</p>
         {children}
       </div>
     </div>
@@ -189,9 +189,7 @@ function Timeline({ agendamentos, loading }) {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
-        <Spinner />
-      </div>
+      <SkeletonList count={6} className="flex flex-col gap-2 py-1" itemClassName="h-10 rounded-xl" />
     )
   }
 
@@ -216,7 +214,7 @@ function Timeline({ agendamentos, loading }) {
           const slot = ocupacao[h]
           return (
             <div key={h} className="flex items-center gap-3 py-2.5">
-              <span className="text-xs font-mono text-gray-300 w-11 shrink-0 text-right">
+              <span className="text-xs tabular-nums text-gray-400 w-11 shrink-0 text-right">
                 {h}
               </span>
               <div className="w-px h-4 bg-gray-200 shrink-0" />
@@ -308,13 +306,13 @@ export default function AgendaPage({ active = true }) {
     : agendamentos[0]
 
   return (
-    <div className="min-h-[calc(100vh-57px)] py-8 px-4">
+    <div className="min-h-[calc(100dvh-57px)] pt-6 pb-12 sm:pt-10 px-4">
       <div className="max-w-lg mx-auto">
 
         {/* ── Cabeçalho com navegação de data ── */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Agenda</h1>
+            <h1 className="font-display text-[1.75rem] leading-tight font-medium tracking-tight text-gray-900">Agenda</h1>
             <button
               onClick={() => setSenha(null)}
               className="text-gray-400 text-sm hover:text-gray-600 transition-colors
@@ -328,7 +326,7 @@ export default function AgendaPage({ active = true }) {
             <button
               onClick={() => shiftDay(-1)}
               aria-label="Dia anterior"
-              className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200
+              className="w-10 h-10 flex items-center justify-center rounded-xl ring-1 ring-inset ring-gray-200
                 bg-white hover:bg-gray-50 active:scale-95 transition"
             >
               <i className="ti ti-chevron-left text-lg text-gray-600" />
@@ -339,7 +337,7 @@ export default function AgendaPage({ active = true }) {
             <button
               onClick={() => shiftDay(1)}
               aria-label="Próximo dia"
-              className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200
+              className="w-10 h-10 flex items-center justify-center rounded-xl ring-1 ring-inset ring-gray-200
                 bg-white hover:bg-gray-50 active:scale-95 transition"
             >
               <i className="ti ti-chevron-right text-lg text-gray-600" />
@@ -350,8 +348,15 @@ export default function AgendaPage({ active = true }) {
         <ErrorBox className="mb-4" onRetry={refetch}>{errF || errA}</ErrorBox>
 
         {loadingF ? (
-          <div className="flex justify-center py-16">
-            <Spinner />
+          <div role="status" aria-label="Carregando" className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              {[0, 1, 2].map(i => <Skeleton key={i} className="h-10 w-24 rounded-xl" />)}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Skeleton className="h-[104px] rounded-2xl" />
+              <Skeleton className="h-[104px] rounded-2xl" />
+            </div>
+            <Skeleton className="h-80 rounded-2xl" />
           </div>
         ) : (
           <>
@@ -364,11 +369,12 @@ export default function AgendaPage({ active = true }) {
                   <button
                     key={f.id}
                     onClick={() => setTabIdx(i)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm
-                      font-medium whitespace-nowrap transition-all shrink-0
+                    aria-pressed={active}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm
+                      font-medium whitespace-nowrap transition-all shrink-0 active:scale-[0.97]
                       ${active
-                        ? 'bg-brand-500 text-white border-brand-500 shadow-sm'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                        ? 'bg-gray-900 text-white shadow-soft'
+                        : 'bg-white text-gray-600 ring-1 ring-inset ring-gray-200 hover:ring-gray-300'
                       }`}
                   >
                     <span
@@ -383,13 +389,13 @@ export default function AgendaPage({ active = true }) {
 
             {/* ── Cards de resumo ── */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white rounded-2xl ring-1 ring-gray-900/5 p-4 shadow-soft">
                 <p className="text-xs text-gray-400 font-medium mb-1">Total do dia</p>
-                <p className="text-3xl font-bold text-gray-900">{agendamentos.length}</p>
+                <p className="font-display text-4xl font-medium tracking-tight text-gray-900 tabular-nums">{agendamentos.length}</p>
                 <p className="text-xs text-gray-400">agendamentos</p>
               </div>
 
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white rounded-2xl ring-1 ring-gray-900/5 p-4 shadow-soft">
                 <p className="text-xs text-gray-400 font-medium mb-1">
                   {isToday ? 'Próxima cliente' : 'Primeira cliente'}
                 </p>
@@ -409,8 +415,8 @@ export default function AgendaPage({ active = true }) {
             </div>
 
             {/* ── Timeline ── */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            <div className="bg-white rounded-2xl ring-1 ring-gray-900/5 p-4 shadow-soft">
+              <p className="text-sm font-semibold text-gray-700 mb-3">
                 {funcionaria?.nome?.split(' ')[0]}
               </p>
               <Timeline
